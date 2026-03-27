@@ -8,6 +8,7 @@ import {
   updateProfile,
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
+import PasswordInput from "./PasswordInput";
 
 interface AuthModalProps {
   onClose: () => void;
@@ -166,22 +167,18 @@ export default function AuthModal({ onClose }: AuthModalProps) {
               required
               className="w-full px-4 py-2.5 rounded-xl bg-[#2a2a2a] border border-[#444] text-gray-100 text-sm placeholder:text-gray-600 focus:outline-none focus:border-[#6b9fff] transition-colors"
             />
-            <input
-              type="password"
-              placeholder="Password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
               required
-              className="w-full px-4 py-2.5 rounded-xl bg-[#2a2a2a] border border-[#444] text-gray-100 text-sm placeholder:text-gray-600 focus:outline-none focus:border-[#6b9fff] transition-colors"
             />
             {tab === "signup" && (
-              <input
-                type="password"
-                placeholder="Confirm password"
+              <PasswordInput
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
+                placeholder="Confirm password"
                 required
-                className="w-full px-4 py-2.5 rounded-xl bg-[#2a2a2a] border border-[#444] text-gray-100 text-sm placeholder:text-gray-600 focus:outline-none focus:border-[#6b9fff] transition-colors"
               />
             )}
 

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import AuthModal from "./AuthModal";
+import ProfileModal from "./ProfileModal";
 
 const navLinks = [
   { href: "/quran", label: "Quran" },
@@ -38,78 +39,126 @@ function TwitterIcon() {
   );
 }
 
+function ProfileIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="4"/>
+      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+    </svg>
+  );
+}
+
 export default function Navbar() {
   const pathname = usePathname();
   const [authOpen, setAuthOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     return onAuthStateChanged(auth, setUser);
   }, []);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
   return (
     <>
-    {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-[#1a1a1a]">
-      <div className="px-8 h-12 flex items-center">
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+      {profileOpen && user && <ProfileModal user={user} onClose={() => setProfileOpen(false)} />}
 
-        {/* Logo — left */}
-        <Link href="/" className="text-white font-serif text-xl tracking-wide w-44">
-          Zikra
-        </Link>
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#1a1a1a]">
+        <div className="px-8 h-12 flex items-center">
 
-        {/* Nav links — center */}
-        <div className="flex-1 flex items-center justify-center gap-10">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`text-sm tracking-wide transition-colors ${
-                pathname.startsWith(link.href)
-                  ? "text-white underline underline-offset-4"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </div>
+          {/* Logo — left */}
+          <Link href="/" className="text-white font-serif text-xl tracking-wide w-44">
+            Zikra
+          </Link>
 
-        {/* Right side */}
-        <div className="w-44 flex items-center justify-end gap-4">
-          {user ? (
-            <>
-              <span className="text-sm text-gray-300 tracking-wide truncate max-w-[100px]">
-                {user.displayName ?? user.email}
-              </span>
+          {/* Nav links — center */}
+          <div className="flex-1 flex items-center justify-center gap-10">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`text-sm tracking-wide transition-colors ${
+                  pathname.startsWith(link.href)
+                    ? "text-white underline underline-offset-4"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+
+          {/* Right side */}
+          <div className="w-44 flex items-center justify-end gap-4">
+            {user ? (
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setDropdownOpen((o) => !o)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                  aria-label="Profile"
+                >
+                  <ProfileIcon />
+                </button>
+
+                {dropdownOpen && (
+                  <div className="absolute left-0 top-8 w-32 bg-[#1e1e1e] border border-[#333] rounded-xl shadow-xl overflow-hidden z-50">
+                    {[
+                      { label: "Profile",  action: () => { setProfileOpen(true);  setDropdownOpen(false); } },
+                      { label: "Saved",    action: () => setDropdownOpen(false) },
+                      { label: "Settings", action: () => setDropdownOpen(false) },
+                    ].map(({ label, action }) => (
+                      <button
+                        key={label}
+                        onClick={action}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-[#2a2a2a] hover:text-white transition-colors"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                    <div className="border-t border-[#333]" />
+                    <button
+                      onClick={() => { signOut(auth); setDropdownOpen(false); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-[#2a2a2a] transition-colors"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
               <button
-                onClick={() => signOut(auth)}
+                onClick={() => setAuthOpen(true)}
                 className="text-sm text-gray-400 hover:text-white tracking-wide transition-colors"
               >
-                Logout
+                Login
               </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setAuthOpen(true)}
-              className="text-sm text-gray-400 hover:text-white tracking-wide transition-colors"
-            >
-              Login
+            )}
+            <a href="https://www.instagram.com/zikra_io" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors" aria-label="Instagram">
+              <InstagramIcon />
+            </a>
+            <button className="text-gray-400 hover:text-white transition-colors" aria-label="Facebook">
+              <FacebookIcon />
             </button>
-          )}
-          <button className="text-gray-400 hover:text-white transition-colors" aria-label="Instagram">
-            <InstagramIcon />
-          </button>
-          <button className="text-gray-400 hover:text-white transition-colors" aria-label="Facebook">
-            <FacebookIcon />
-          </button>
-          <button className="text-gray-400 hover:text-white transition-colors" aria-label="Twitter">
-            <TwitterIcon />
-          </button>
-        </div>
+            <button className="text-gray-400 hover:text-white transition-colors" aria-label="Twitter">
+              <TwitterIcon />
+            </button>
+          </div>
 
-      </div>
-    </nav>
+        </div>
+      </nav>
     </>
   );
 }
