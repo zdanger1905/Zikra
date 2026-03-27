@@ -486,7 +486,7 @@ export default function RecitationPage() {
         prevStart = selStartRef.current;
         prevEnd   = selEndRef.current;
         // Snap handle to the word it just landed on
-        placeHandle(hRef, draggingHandle === "start" ? selStartRef.current : selEndRef.current, draggingHandle);
+        if (draggingHandle) placeHandle(hRef, draggingHandle === "start" ? selStartRef.current : selEndRef.current, draggingHandle);
       }
     }
 
