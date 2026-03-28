@@ -495,6 +495,19 @@ export default function SurahPage() {
               ref={(el) => { verseRefs.current[ayah.numberInSurah] = el; }}
               className={`py-8 border-b-2 last:border-0 ${theme === "dark" ? "border-gray-600" : "border-gray-200"}`}
             >
+              {/* Back to results button — only on the jumped-to verse */}
+              {searchParams.get("back") === "1" && ayah.numberInSurah === Number(searchParams.get("verse")) && (
+                <Link
+                  href={`/quran?tab=topic&q=${encodeURIComponent(searchParams.get("q") ?? "")}`}
+                  className="inline-flex items-center gap-1.5 mb-3 text-sm text-gray-400 hover:text-white transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 12H5M12 5l-7 7 7 7"/>
+                  </svg>
+                  Back to results
+                </Link>
+              )}
+
               {/* Verse number badge + play button — left side */}
               <div className="flex justify-start items-center gap-2 mb-4">
                 <span className="text-xs font-semibold text-gray-200 bg-[#5a5a5a] px-2 py-1 rounded-full flex-shrink-0">

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 interface Surah {
   number: number;
@@ -32,7 +33,10 @@ function highlightTerm(text: string, term: string): React.ReactNode[] {
 }
 
 export default function QuranPage() {
-  const [tab, setTab] = useState<"surah" | "topic">("surah");
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<"surah" | "topic">(
+    searchParams.get("tab") === "topic" ? "topic" : "surah"
+  );
 
   // Surah tab
   const [surahs, setSurahs] = useState<Surah[]>([]);
@@ -40,7 +44,7 @@ export default function QuranPage() {
   const [loading, setLoading] = useState(true);
 
   // Topic tab
-  const [topicQuery, setTopicQuery] = useState("");
+  const [topicQuery, setTopicQuery] = useState(searchParams.get("q") ?? "");
   const [topicResults, setTopicResults] = useState<TopicResult[]>([]);
   const [topicLoading, setTopicLoading] = useState(false);
   const [topicSearched, setTopicSearched] = useState(false);
@@ -82,6 +86,22 @@ export default function QuranPage() {
       }
     }, 500);
   }, [topicQuery]);
+
+  // Scroll to top on fresh load (no back-navigation)
+  useEffect(() => {
+    if (!searchParams.get("from")) window.scrollTo(0, 0);
+  }, []);
+
+  // Scroll to the result the user came from
+  useEffect(() => {
+    const from = searchParams.get("from");
+    if (!from || topicLoading || topicResults.length === 0) return;
+    const t = setTimeout(() => {
+      const el = document.getElementById(`result-${from}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => clearTimeout(t);
+  }, [topicResults, topicLoading, searchParams]);
 
   const filtered = surahs.filter(
     (s) =>
@@ -203,8 +223,9 @@ export default function QuranPage() {
                 {topicResults.map((r, i) => (
                   <Link
                     key={i}
-                    href={`/quran/${r.surahNum}?verse=${r.verseNum}`}
+                    href={`/quran/${r.surahNum}?verse=${r.verseNum}&back=1&q=${encodeURIComponent(topicQuery.trim())}&from=${r.surahNum}-${r.verseNum}`}
                     className="flex gap-4 bg-[#4a4a4a] rounded-xl p-4 border border-transparent hover:border-[#888] transition-all group"
+                    id={`result-${r.surahNum}-${r.verseNum}`}
                   >
                     {/* Verse badge */}
                     <div className="flex items-center justify-center bg-[#5a5a5a] rounded-xl px-3 py-2 flex-shrink-0">
