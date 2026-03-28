@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import AuthModal from "./AuthModal";
@@ -50,6 +50,7 @@ function ProfileIcon() {
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [authOpen, setAuthOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -118,6 +119,7 @@ export default function Navbar() {
                     {[
                       { label: "Profile",  action: () => { setProfileOpen(true);  setDropdownOpen(false); } },
                       { label: "Saved",    action: () => setDropdownOpen(false) },
+                      { label: "History",  action: () => { router.push("/history"); setDropdownOpen(false); } },
                       { label: "Settings", action: () => setDropdownOpen(false) },
                     ].map(({ label, action }) => (
                       <button

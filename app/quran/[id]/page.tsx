@@ -177,6 +177,14 @@ export default function SurahPage() {
     return () => clearTimeout(t);
   }, [arabic, searchParams]);
 
+  // Record surah visit in history
+  useEffect(() => {
+    if (!arabic) return;
+    import("@/lib/history").then(({ recordSurahVisit }) => {
+      recordSurahVisit(surahNum, arabic.name, arabic.englishName);
+    });
+  }, [arabic, surahNum]);
+
   useEffect(() => {
     // Stop any playing audio when navigating surahs
     if (chapterAudioRef.current) {

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { auth } from "@/lib/firebase";
+import { createAIChat, updateAIChat } from "@/lib/history";
 
-interface Message {
+export interface Message {
   role: "user" | "assistant";
   content: string;
 }
@@ -10,17 +12,23 @@ interface Message {
 interface AskAIModalProps {
   surahNum: number;
   verseNum: number;
-  verseText: string;       // translation text
+  verseText: string;
   arabicText: string;
   onClose: () => void;
+  initialMessages?: Message[];
+  chatId?: string;
 }
 
-export default function AskAIModal({ surahNum, verseNum, verseText, arabicText, onClose }: AskAIModalProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+export default function AskAIModal({
+  surahNum, verseNum, verseText, arabicText, onClose,
+  initialMessages, chatId: existingChatId,
+}: AskAIModalProps) {
+  const [messages, setMessages] = useState<Message[]>(initialMessages ?? []);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const chatIdRef = useRef<string | null>(existingChatId ?? null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -69,6 +77,20 @@ export default function AskAIModal({ surahNum, verseNum, verseText, arabicText, 
           { role: "assistant", content: assistantText },
         ]);
       }
+
+      // Save to Firestore if user is logged in
+      const user = auth.currentUser;
+      if (user) {
+        const finalMessages = [
+          ...newMessages,
+          { role: "assistant" as const, content: assistantText },
+        ];
+        if (!chatIdRef.current) {
+          chatIdRef.current = await createAIChat(surahNum, verseNum, verseText, arabicText, finalMessages);
+        } else {
+          await updateAIChat(chatIdRef.current, finalMessages);
+        }
+      }
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -93,11 +115,7 @@ export default function AskAIModal({ surahNum, verseNum, verseText, arabicText, 
             <p className="text-white font-serif text-lg tracking-wide">Ask about this verse</p>
             <p className="text-gray-500 text-xs mt-0.5">Surah {surahNum}:{verseNum}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-200 transition-colors"
-            aria-label="Close"
-          >
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-200 transition-colors" aria-label="Close">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
@@ -118,13 +136,11 @@ export default function AskAIModal({ surahNum, verseNum, verseText, arabicText, 
           )}
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
-                  msg.role === "user"
-                    ? "bg-[#6b9fff] text-white rounded-br-sm"
-                    : "bg-[#2a2a2a] text-gray-200 rounded-bl-sm"
-                }`}
-              >
+              <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                msg.role === "user"
+                  ? "bg-[#6b9fff] text-white rounded-br-sm"
+                  : "bg-[#2a2a2a] text-gray-200 rounded-bl-sm"
+              }`}>
                 {msg.content || (
                   <span className="flex gap-1 items-center py-1">
                     <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
