@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -33,6 +33,10 @@ function highlightTerm(text: string, term: string): React.ReactNode[] {
 }
 
 export default function QuranPage() {
+  return <Suspense><QuranPageInner /></Suspense>;
+}
+
+function QuranPageInner() {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<"surah" | "topic">(
     searchParams.get("tab") === "topic" ? "topic" : "surah"
