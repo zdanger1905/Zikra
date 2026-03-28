@@ -11,6 +11,7 @@ import {
   type AsadAyah,
   type FootnoteSegment,
 } from "@/lib/asadQuran";
+import AskAIModal from "@/components/AskAIModal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -86,6 +87,8 @@ export default function SurahPage() {
   useEffect(() => {
     localStorage.setItem("surah-theme", theme);
   }, [theme]);
+  // AI modal
+  const [aiVerse, setAiVerse] = useState<{ verseNum: number; translation: string; arabic: string } | null>(null);
   // { verseNum, wordIdx } — which word's tooltip is open
   const [activeWord, setActiveWord] = useState<{ verseNum: number; wordIdx: number } | null>(null);
   // Audio playback state
@@ -402,6 +405,15 @@ export default function SurahPage() {
 
   return (
     <>
+      {aiVerse && (
+        <AskAIModal
+          surahNum={surahNum}
+          verseNum={aiVerse.verseNum}
+          verseText={aiVerse.translation}
+          arabicText={aiVerse.arabic}
+          onClose={() => setAiVerse(null)}
+        />
+      )}
       <SurahBanner
         englishName={arabic.englishName}
         arabicName={arabic.name}
@@ -508,27 +520,44 @@ export default function SurahPage() {
                 </Link>
               )}
 
-              {/* Verse number badge + play button — left side */}
-              <div className="flex justify-start items-center gap-2 mb-4">
-                <span className="text-xs font-semibold text-gray-200 bg-[#5a5a5a] px-2 py-1 rounded-full flex-shrink-0">
-                  {surahNum}:{ayah.numberInSurah}
-                </span>
-                {audioData && (
-                  <button
-                    onClick={() => {
-                      // Reset loop settings and always restart this verse from the beginning
-                      setLoopFrom(null); loopFromRef.current = null;
-                      setLoopTo(null);   loopToRef.current = null;
-                      setLoopCount(1);   loopCountRef.current = 1;
-                      loopIterationRef.current = 1;
-                      playVerse(ayah.numberInSurah);
-                    }}
-                    title="Play recitation"
-                    className="flex items-center justify-center w-7 h-7 rounded-full bg-[#5a5a5a] text-gray-200 hover:bg-[#666] transition-colors flex-shrink-0"
-                  >
-                    <PlayIcon className="w-3.5 h-3.5" />
-                  </button>
-                )}
+              {/* Verse header row */}
+              <div className="flex justify-between items-center mb-4">
+                {/* Left: verse badge + play */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-gray-200 bg-[#5a5a5a] px-2 py-1 rounded-full flex-shrink-0">
+                    {surahNum}:{ayah.numberInSurah}
+                  </span>
+                  {audioData && (
+                    <button
+                      onClick={() => {
+                        setLoopFrom(null); loopFromRef.current = null;
+                        setLoopTo(null);   loopToRef.current = null;
+                        setLoopCount(1);   loopCountRef.current = 1;
+                        loopIterationRef.current = 1;
+                        playVerse(ayah.numberInSurah);
+                      }}
+                      title="Play recitation"
+                      className="flex items-center justify-center w-7 h-7 rounded-full bg-[#5a5a5a] text-gray-200 hover:bg-[#666] transition-colors flex-shrink-0"
+                    >
+                      <PlayIcon className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                {/* Right: AI button */}
+                <button
+                  onClick={() => {
+                    const parsed = getAyah(surahNum, ayah.numberInSurah, asadData!);
+                    const translation = parsed?.segments.filter(s => s.type === "text").map(s => s.content).join("") ?? "";
+                    setAiVerse({ verseNum: ayah.numberInSurah, translation, arabic: ayah.text });
+                  }}
+                  title="Ask AI about this verse"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#5a5a5a] text-gray-300 hover:bg-[#6b9fff] hover:text-white transition-colors text-xs font-medium flex-shrink-0"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  Ask AI
+                </button>
               </div>
 
               {/* Arabic — interactive word-by-word when data available */}
