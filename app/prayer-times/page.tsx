@@ -139,6 +139,7 @@ export default function PrayerTimesPage() {
   }
 
   useEffect(() => {
+    window.scrollTo(0, 0);
     useLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
