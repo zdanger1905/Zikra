@@ -373,6 +373,12 @@ export default function SurahPage() {
 
   const skipVerse = useCallback((delta: number) => {
     const current = playingVerseRef.current ?? 1;
+    if (delta === -1 && chapterAudioRef.current && audioDataRef.current) {
+      const verseKey = `${surahNumRef.current}:${current}`;
+      const verseStart = (audioDataRef.current[verseKey]?.timestampFrom ?? 0) / 1000;
+      const isAtStart = chapterAudioRef.current.currentTime - verseStart < 2;
+      if (!isAtStart) { playVerse(current, true); return; }
+    }
     const next = Math.max(1, Math.min(numberOfAyahsRef.current, current + delta));
     playVerse(next, true);
   }, [playVerse]);

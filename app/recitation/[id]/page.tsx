@@ -327,7 +327,25 @@ export default function RecitationPage() {
 
   function skipVerse(delta: number) {
     const cur = playingVerse ?? 1;
-    const next = Math.max(1, Math.min(surah?.numberOfAyahs ?? 1, cur + delta));
+    if (delta === -1) {
+      if (cursorsActiveRef.current) {
+        // In cursor mode: always jump back to cursor start
+        const startVerse = selStartRef.current?.verseNum ?? cur;
+        playVerse(startVerse);
+        if (chapterAudioRef.current && loopStartTimeRef.current !== null) {
+          chapterAudioRef.current.currentTime = loopStartTimeRef.current / 1000;
+        }
+        return;
+      }
+      if (chapterAudioRef.current && audioDataRef.current) {
+        const verseStart = (audioDataRef.current[String(cur)]?.timestampFrom ?? 0) / 1000;
+        const isAtStart = chapterAudioRef.current.currentTime - verseStart < 2;
+        if (!isAtStart) { playVerse(cur); return; }
+      }
+    }
+    const minVerse = cursorsActiveRef.current ? (selStartRef.current?.verseNum ?? 1) : 1;
+    const maxVerse = cursorsActiveRef.current ? (selEndRef.current?.verseNum ?? surah?.numberOfAyahs ?? 1) : (surah?.numberOfAyahs ?? 1);
+    const next = Math.max(minVerse, Math.min(maxVerse, cur + delta));
     playVerse(next);
   }
 
@@ -758,11 +776,36 @@ export default function RecitationPage() {
                   playingVerseRef.current = null;
                   setPlayingWordIdx(null);
 
-                  const sv = playingVerse ?? 1;
-                  const ev = Math.min(sv + 1, surah.numberOfAyahs);
-                  const endWords = wordData?.[ev];
-                  const ss: WordPos = { verseNum: sv, wordIdx: 0 };
-                  const se: WordPos = { verseNum: ev, wordIdx: Math.max(0, (endWords?.length ?? 1) - 1) };
+                  // Find 3 words centered around the middle of the screen
+                  const midY = window.innerHeight / 2;
+                  const allWordEls = Array.from(document.querySelectorAll<HTMLElement>("[data-v][data-w]"))
+                    .filter((el) => {
+                      const r = el.getBoundingClientRect();
+                      return r.bottom > 0 && r.top < window.innerHeight;
+                    })
+                    .sort((a, b) => {
+                      const ra = a.getBoundingClientRect();
+                      const rb = b.getBoundingClientRect();
+                      return Math.abs((ra.top + ra.bottom) / 2 - midY) - Math.abs((rb.top + rb.bottom) / 2 - midY);
+                    });
+                  const midEl   = allWordEls[0];
+                  const startEl = allWordEls.find((el) => {
+                    const r = el.getBoundingClientRect();
+                    return (r.top + r.bottom) / 2 <= midY;
+                  }) ?? midEl;
+                  const endEl = allWordEls.find((el) => {
+                    const r = el.getBoundingClientRect();
+                    return (r.top + r.bottom) / 2 >= midY;
+                  }) ?? midEl;
+                  const fallbackV = playingVerse ?? 1;
+                  const ss: WordPos = startEl
+                    ? { verseNum: Number(startEl.dataset.v), wordIdx: Math.max(0, Number(startEl.dataset.w) - 1) }
+                    : { verseNum: fallbackV, wordIdx: 0 };
+                  const se: WordPos = endEl
+                    ? { verseNum: Number(endEl.dataset.v), wordIdx: Number(endEl.dataset.w) + 1 }
+                    : { verseNum: Math.min(fallbackV + 1, surah.numberOfAyahs), wordIdx: 0 };
+                  const sv = ss.verseNum;
+                  const ev = se.verseNum;
                   setSelStart(ss); selStartRef.current = ss;
                   setSelEnd(se);   selEndRef.current = se;
                   setLoopStart(sv); loopStartRef.current = sv;
@@ -788,11 +831,11 @@ export default function RecitationPage() {
               <div className="w-full space-y-4 border-t border-[#333] pt-4">
                 <div className="flex justify-center gap-1 text-xs text-center leading-snug">
                   <span className="text-green-400 font-semibold">
-                    {selStart ? `${selStart.verseNum}:${selStart.wordIdx + 1}` : "—"}
+                    {selStart ? `${surahNum}:${selStart.verseNum}` : "—"}
                   </span>
                   <span className="text-gray-600">→</span>
                   <span className="text-red-400 font-semibold">
-                    {selEnd ? `${selEnd.verseNum}:${selEnd.wordIdx + 1}` : "—"}
+                    {selEnd ? `${surahNum}:${selEnd.verseNum}` : "—"}
                   </span>
                 </div>
 
@@ -804,7 +847,7 @@ export default function RecitationPage() {
                       return (
                         <button
                           key={v}
-                          onClick={() => { setRepeatCount(val); repeatCountRef.current = val; }}
+                          onClick={() => { setRepeatCount(val); repeatCountRef.current = val; currentRepeatRef.current = 1; setCurrentRepeat(1); }}
                           className={`py-1.5 rounded-lg text-xs font-medium transition-colors ${
                             repeatCount === val
                               ? "bg-[#4a4a4a] text-white"
