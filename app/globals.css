@@ -42,6 +42,10 @@ body {
 .recitation-word {
   color: rgb(243, 244, 246);
   transition: color 100ms;
+  cursor: default;
+}
+.recitation-word:hover {
+  color: #6b9fff !important;
 }
 [data-playing="1"] {
   color: #6b9fff;

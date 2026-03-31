@@ -24,7 +24,7 @@ interface SurahEdition {
   ayahs: Ayah[];
 }
 
-interface WordEntry { arabic: string; }
+interface WordEntry { arabic: string; transliteration: string; }
 
 interface VerseAudio {
   timestampFrom: number;
@@ -49,6 +49,13 @@ export default function RecitationPage() {
   // Data
   const [surah, setSurah] = useState<SurahEdition | null>(null);
   const [wordData, setWordData] = useState<Record<number, WordEntry[]> | null>(null);
+  const [activeTooltip, setActiveTooltip] = useState<{ vn: number; wi: number } | null>(null);
+  useEffect(() => {
+    if (!activeTooltip) return;
+    function onClickOut() { setActiveTooltip(null); }
+    document.addEventListener("click", onClickOut);
+    return () => document.removeEventListener("click", onClickOut);
+  }, [activeTooltip]);
   const [audioData, setAudioData] = useState<Record<string, VerseAudio> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -169,7 +176,7 @@ export default function RecitationPage() {
 
     Promise.all([
       fetch(`https://api.alquran.cloud/v1/surah/${id}/editions/quran-uthmani`).then(r => r.json()),
-      fetch(`https://api.quran.com/api/v4/verses/by_chapter/${id}?words=true&word_fields=text_uthmani&per_page=300`)
+      fetch(`https://api.quran.com/api/v4/verses/by_chapter/${id}?words=true&word_fields=text_uthmani,transliteration&per_page=300`)
         .then(r => r.json()).catch(() => null),
       fetch(`https://api.qurancdn.com/api/qdc/audio/reciters/7/audio_files?chapter_number=${id}&segments=true`)
         .then(r => r.json()).catch(() => null),
@@ -188,7 +195,7 @@ export default function RecitationPage() {
           if (!vNum) continue;
           wMap[Number(vNum)] = (v.words ?? [])
             .filter((w: any) => w.char_type_name !== "end")
-            .map((w: any) => ({ arabic: w.text_uthmani ?? w.text ?? "" }));
+            .map((w: any) => ({ arabic: w.text_uthmani ?? w.text ?? "", transliteration: w.transliteration?.text ?? "" }));
         }
         setWordData(wMap);
       }
@@ -605,18 +612,25 @@ export default function RecitationPage() {
               <p className="text-sm text-gray-500">{surah.englishNameTranslation} · {surah.numberOfAyahs} verses</p>
             </div>
 
+            {/* Bismillah header */}
+            {showBismillah && (
+              <div className="text-center mb-8">
+                <p className="arabic text-3xl text-gray-200 leading-loose">
+                  بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+                </p>
+                <p className="text-sm mt-1 italic text-gray-500">
+                  In the name of Allah, the Most Gracious, the Most Merciful
+                </p>
+              </div>
+            )}
+
             {/* Continuous Arabic text */}
             <div
               className="arabic text-center"
               dir="rtl"
               style={{ fontSize: "2.2em", lineHeight: "2.6" }}
+              onClick={(e) => { if ((e.target as HTMLElement).dataset.w === undefined) setActiveTooltip(null); }}
             >
-              {/* Bismillah */}
-              {showBismillah && (
-                <span className="text-gray-300">
-                  بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ{" "}
-                </span>
-              )}
 
               {surah.ayahs.map((ayah, i) => {
                 const vn = ayah.numberInSurah;
@@ -633,13 +647,24 @@ export default function RecitationPage() {
                           data-v={vn}
                           data-w={wi}
                           data-in-sel={isWordInRange(vn, wi) ? "1" : undefined}
-                          className="recitation-word"
+                          className="recitation-word hover:text-[#6b9fff] relative"
+                          onClick={() => setActiveTooltip(
+                            activeTooltip?.vn === vn && activeTooltip?.wi === wi ? null : { vn, wi }
+                          )}
                         >
+                          {activeTooltip?.vn === vn && activeTooltip?.wi === wi && w.transliteration && (
+                            <span
+                              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 rounded-md bg-[#1a1a1a] border border-[#444] text-[#6b9fff] text-xs font-sans whitespace-nowrap pointer-events-none"
+                              style={{ fontSize: "0.35em", letterSpacing: "0.02em" }}
+                            >
+                              {w.transliteration}
+                            </span>
+                          )}
                           {w.arabic}{" "}
                         </span>
                       ))
                     ) : (
-                      <span data-v={vn} data-w={0} className="recitation-word">{rawText}{" "}</span>
+                      <span data-v={vn} data-w={0} className="recitation-word hover:text-[#6b9fff]">{rawText}{" "}</span>
                     )}
 
                     {/* Verse end marker */}
