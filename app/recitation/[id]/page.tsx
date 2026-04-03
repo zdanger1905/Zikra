@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { fuzzyMatch } from "@/lib/history";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -713,7 +714,7 @@ export default function RecitationPage() {
   }
 
   const filteredSurahs = surahList.filter(s =>
-    s.englishName.toLowerCase().includes(listSearch.toLowerCase()) ||
+    fuzzyMatch(s.englishName, listSearch) ||
     s.name.includes(listSearch) ||
     s.number.toString().includes(listSearch)
   );

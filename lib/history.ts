@@ -212,3 +212,19 @@ export function timeAgo(date: Date): string {
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString();
 }
+
+// Fuzzy match: returns true if all characters of `query` appear in `target` in order.
+// Also returns true for exact substring matches (handles typos by letter order).
+export function fuzzyMatch(target: string, query: string): boolean {
+  if (!query) return true;
+  const t = target.toLowerCase();
+  const q = query.toLowerCase();
+  // Exact substring — fast path
+  if (t.includes(q)) return true;
+  // Sequential character match
+  let qi = 0;
+  for (let i = 0; i < t.length && qi < q.length; i++) {
+    if (t[i] === q[qi]) qi++;
+  }
+  return qi === q.length;
+}

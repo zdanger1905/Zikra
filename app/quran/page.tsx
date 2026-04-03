@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { fuzzyMatch } from "@/lib/history";
 
 interface Surah {
   number: number;
@@ -61,7 +62,7 @@ function QuranPageInner() {
       .catch(() => setLoading(false));
   }, []);
 
-  // Debounced topic search
+  // Debounced topic search with semantic expansion
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = topicQuery.trim();
@@ -70,19 +71,46 @@ function QuranPageInner() {
       setTopicLoading(true);
       setTopicSearched(true);
       try {
-        const res = await fetch(
-          `https://api.alquran.cloud/v1/search/${encodeURIComponent(q)}/all/en.asad`
+        // Expand query with related Quranic terms via AI
+        let terms: string[] = [q];
+        try {
+          const expandRes = await fetch("/api/expand-query", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: q }),
+          });
+          const expandJson = await expandRes.json();
+          terms = expandJson.terms ?? [q];
+        } catch {}
+
+        // Search all terms in parallel, deduplicate by surah:verse key
+        const allMatches = await Promise.all(
+          terms.map((term) =>
+            fetch(`https://api.alquran.cloud/v1/search/${encodeURIComponent(term)}/all/en.asad`)
+              .then((r) => r.json())
+              .then((json) => json?.data?.matches ?? [])
+              .catch(() => [])
+          )
         );
-        const json = await res.json();
-        const matches: any[] = json?.data?.matches ?? [];
-        setTopicResults(
-          matches.slice(0, 50).map((m: any) => ({
-            surahNum: m.surah?.number ?? 0,
-            surahName: m.surah?.englishName ?? "",
-            verseNum: m.numberInSurah ?? 0,
-            text: m.text ?? "",
-          }))
-        );
+
+        const seen = new Set<string>();
+        const merged: TopicResult[] = [];
+        for (const matches of allMatches) {
+          for (const m of matches as any[]) {
+            const key = `${m.surah?.number}:${m.numberInSurah}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            merged.push({
+              surahNum: m.surah?.number ?? 0,
+              surahName: m.surah?.englishName ?? "",
+              verseNum: m.numberInSurah ?? 0,
+              text: m.text ?? "",
+            });
+            if (merged.length >= 50) break;
+          }
+          if (merged.length >= 50) break;
+        }
+        setTopicResults(merged);
       } catch {
         setTopicResults([]);
       } finally {
@@ -109,9 +137,9 @@ function QuranPageInner() {
 
   const filtered = surahs.filter(
     (s) =>
-      s.englishName.toLowerCase().includes(search.toLowerCase()) ||
+      fuzzyMatch(s.englishName, search) ||
+      fuzzyMatch(s.englishNameTranslation, search) ||
       s.name.includes(search) ||
-      s.englishNameTranslation.toLowerCase().includes(search.toLowerCase()) ||
       s.number.toString().includes(search)
   );
 
