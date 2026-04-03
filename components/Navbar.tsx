@@ -118,7 +118,7 @@ export default function Navbar() {
                   <div className="absolute left-0 top-8 w-32 bg-[#1e1e1e] border border-[#333] rounded-xl shadow-xl overflow-hidden z-50">
                     {[
                       { label: "Profile",  action: () => { setProfileOpen(true);  setDropdownOpen(false); } },
-                      { label: "Saved",    action: () => setDropdownOpen(false) },
+                      { label: "Saved",    action: () => { router.push("/saved"); setDropdownOpen(false); } },
                       { label: "History",  action: () => { router.push("/history"); setDropdownOpen(false); } },
                       { label: "Settings", action: () => setDropdownOpen(false) },
                     ].map(({ label, action }) => (

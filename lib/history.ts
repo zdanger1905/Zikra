@@ -1,6 +1,6 @@
 import {
   collection, addDoc, updateDoc, doc, query,
-  orderBy, limit, getDocs, serverTimestamp, setDoc,
+  orderBy, limit, getDocs, serverTimestamp, setDoc, deleteDoc,
 } from "firebase/firestore";
 import { db, auth } from "./firebase";
 
@@ -99,6 +99,106 @@ export async function getAIChats(): Promise<AIChat[]> {
     createdAt: d.data().createdAt?.toDate() ?? new Date(),
     updatedAt: d.data().updatedAt?.toDate() ?? new Date(),
   }));
+}
+
+export interface SavedVerse {
+  id: string;
+  surahNum: number;
+  verseNum: number;
+  surahEnglishName: string;
+  translation: string;
+  savedAt: Date;
+  folderId?: string | null;
+}
+
+export async function saveVerse(surahNum: number, verseNum: number, surahEnglishName: string, translation: string) {
+  const user = auth.currentUser;
+  if (!user) return;
+  // Use surahNum-verseNum as ID to prevent duplicates
+  await setDoc(doc(db, "users", user.uid, "savedVerses", `${surahNum}-${verseNum}`), {
+    surahNum, verseNum, surahEnglishName, translation,
+    savedAt: serverTimestamp(),
+  });
+}
+
+export async function unsaveVerse(surahNum: number, verseNum: number) {
+  const user = auth.currentUser;
+  if (!user) return;
+  await deleteDoc(doc(db, "users", user.uid, "savedVerses", `${surahNum}-${verseNum}`));
+}
+
+export async function getSavedVerses(): Promise<SavedVerse[]> {
+  const user = auth.currentUser;
+  if (!user) return [];
+  const q = query(collection(db, "users", user.uid, "savedVerses"), orderBy("savedAt", "desc"));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<SavedVerse, "id" | "savedAt">),
+    savedAt: d.data().savedAt?.toDate() ?? new Date(),
+    folderId: d.data().folderId ?? null,
+  }));
+}
+
+export async function getSavedVerseKeys(): Promise<Set<string>> {
+  const user = auth.currentUser;
+  if (!user) return new Set();
+  const q = query(collection(db, "users", user.uid, "savedVerses"));
+  const snap = await getDocs(q);
+  return new Set(snap.docs.map((d) => d.id));
+}
+
+export async function moveVerseToFolder(verseId: string, folderId: string | null) {
+  const user = auth.currentUser;
+  if (!user) return;
+  await updateDoc(doc(db, "users", user.uid, "savedVerses", verseId), { folderId });
+}
+
+// ── Folders ──────────────────────────────────────────────────────────────────
+
+export interface SavedFolder {
+  id: string;
+  name: string;
+  createdAt: Date;
+}
+
+export async function createFolder(name: string): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) return "";
+  const ref = await addDoc(collection(db, "users", user.uid, "savedFolders"), {
+    name,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function getFolders(): Promise<SavedFolder[]> {
+  const user = auth.currentUser;
+  if (!user) return [];
+  const q = query(collection(db, "users", user.uid, "savedFolders"), orderBy("createdAt", "asc"));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({
+    id: d.id,
+    name: d.data().name,
+    createdAt: d.data().createdAt?.toDate() ?? new Date(),
+  }));
+}
+
+export async function deleteFolder(folderId: string) {
+  const user = auth.currentUser;
+  if (!user) return;
+  await deleteDoc(doc(db, "users", user.uid, "savedFolders", folderId));
+  // Move verses out of deleted folder
+  const q = query(collection(db, "users", user.uid, "savedVerses"));
+  const snap = await getDocs(q);
+  const batch = snap.docs.filter((d) => d.data().folderId === folderId);
+  await Promise.all(batch.map((d) => updateDoc(d.ref, { folderId: null })));
+}
+
+export async function renameFolder(folderId: string, name: string) {
+  const user = auth.currentUser;
+  if (!user) return;
+  await updateDoc(doc(db, "users", user.uid, "savedFolders", folderId), { name });
 }
 
 export function timeAgo(date: Date): string {

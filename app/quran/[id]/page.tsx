@@ -12,6 +12,9 @@ import {
   type FootnoteSegment,
 } from "@/lib/asadQuran";
 import AskAIModal from "@/components/AskAIModal";
+import { auth } from "@/lib/firebase";
+import { saveVerse, unsaveVerse, getSavedVerseKeys } from "@/lib/history";
+import AuthModal from "@/components/AuthModal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -89,6 +92,18 @@ export default function SurahPage() {
   }, [theme]);
   // AI modal
   const [aiVerse, setAiVerse] = useState<{ verseNum: number; translation: string; arabic: string } | null>(null);
+  // Saved verses
+  const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [authPromptOpen, setAuthPromptOpen] = useState(false);
+  useEffect(() => {
+    const unsub = auth.onAuthStateChanged((user) => {
+      setLoggedIn(!!user);
+      if (user) getSavedVerseKeys().then(setSavedKeys);
+      else setSavedKeys(new Set());
+    });
+    return unsub;
+  }, []);
   // { verseNum, wordIdx } — which word's tooltip is open
   const [activeWord, setActiveWord] = useState<{ verseNum: number; wordIdx: number } | null>(null);
   // Audio playback state
@@ -419,6 +434,7 @@ export default function SurahPage() {
 
   return (
     <>
+      {authPromptOpen && <AuthModal onClose={() => setAuthPromptOpen(false)} />}
       {aiVerse && (
         <AskAIModal
           surahNum={surahNum}
@@ -557,21 +573,49 @@ export default function SurahPage() {
                     </button>
                   )}
                 </div>
-                {/* Right: AI button */}
-                <button
-                  onClick={() => {
-                    const parsed = getAyah(surahNum, ayah.numberInSurah, asadData!);
-                    const translation = parsed?.segments.filter(s => s.type === "text").map(s => s.content).join("") ?? "";
-                    setAiVerse({ verseNum: ayah.numberInSurah, translation, arabic: ayah.text });
-                  }}
-                  title="Ask AI about this verse"
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#5a5a5a] text-gray-300 hover:bg-[#6b9fff] hover:text-white transition-colors text-xs font-medium flex-shrink-0"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                  </svg>
-                  Ask AI
-                </button>
+                {/* Right: Save + AI buttons */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {(() => {
+                    const key = `${surahNum}-${ayah.numberInSurah}`;
+                    const saved = savedKeys.has(key);
+                    return (
+                      <button
+                        onClick={async () => {
+                          if (!loggedIn) { setAuthPromptOpen(true); return; }
+                          if (saved) {
+                            await unsaveVerse(surahNum, ayah.numberInSurah);
+                            setSavedKeys((prev) => { const s = new Set(prev); s.delete(key); return s; });
+                          } else {
+                            const parsed = getAyah(surahNum, ayah.numberInSurah, asadData!);
+                            const translation = parsed?.segments.filter(s => s.type === "text").map(s => s.content).join("") ?? "";
+                            await saveVerse(surahNum, ayah.numberInSurah, arabic!.englishName, translation);
+                            setSavedKeys((prev) => new Set(prev).add(key));
+                          }
+                        }}
+                        title={saved ? "Unsave verse" : "Save verse"}
+                        className="flex items-center justify-center w-7 h-7 rounded-full bg-[#5a5a5a] hover:bg-[#6b9fff] transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={saved ? "text-white" : "text-gray-300"}>
+                          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                        </svg>
+                      </button>
+                    );
+                  })()}
+                  <button
+                    onClick={() => {
+                      const parsed = getAyah(surahNum, ayah.numberInSurah, asadData!);
+                      const translation = parsed?.segments.filter(s => s.type === "text").map(s => s.content).join("") ?? "";
+                      setAiVerse({ verseNum: ayah.numberInSurah, translation, arabic: ayah.text });
+                    }}
+                    title="Ask AI about this verse"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#5a5a5a] text-gray-300 hover:bg-[#6b9fff] hover:text-white transition-colors text-xs font-medium"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    Ask AI
+                  </button>
+                </div>
               </div>
 
               {/* Arabic — interactive word-by-word when data available */}
