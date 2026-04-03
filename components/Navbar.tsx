@@ -11,6 +11,7 @@ import ProfileModal from "./ProfileModal";
 const navLinks = [
   { href: "/quran", label: "Quran" },
   { href: "/prayer-times", label: "Prayer Times" },
+  { href: "/recitation/1", label: "Recitation" },
 ];
 
 function InstagramIcon() {
@@ -78,21 +79,21 @@ export default function Navbar() {
       {profileOpen && user && <ProfileModal user={user} onClose={() => setProfileOpen(false)} />}
 
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#1a1a1a]">
-        <div className="px-8 h-12 flex items-center">
+        <div className="px-4 md:px-8 h-12 flex items-center">
 
           {/* Logo — left */}
-          <Link href="/" className="text-white font-serif text-xl tracking-wide w-44">
+          <Link href="/" className="text-white font-serif text-xl tracking-wide flex-shrink-0 mr-4">
             Zikra
           </Link>
 
           {/* Nav links — center */}
-          <div className="flex-1 flex items-center justify-center gap-10">
+          <div className="flex-1 hidden md:flex items-center justify-center gap-6">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`text-sm tracking-wide transition-colors ${
-                  pathname.startsWith(link.href)
+                className={`text-sm tracking-wide transition-colors whitespace-nowrap ${
+                  pathname.startsWith(link.href === "/recitation/1" ? "/recitation" : link.href)
                     ? "text-white underline underline-offset-4"
                     : "text-gray-400 hover:text-white"
                 }`}
@@ -103,7 +104,7 @@ export default function Navbar() {
           </div>
 
           {/* Right side */}
-          <div className="w-44 flex items-center justify-end gap-4">
+          <div className="flex items-center justify-end gap-3 flex-shrink-0 ml-auto">
             {user ? (
               <div className="relative" ref={dropdownRef}>
                 <button
@@ -115,7 +116,7 @@ export default function Navbar() {
                 </button>
 
                 {dropdownOpen && (
-                  <div className="absolute left-0 top-8 w-32 bg-[#1e1e1e] border border-[#333] rounded-xl shadow-xl overflow-hidden z-50">
+                  <div className="absolute right-0 top-8 w-32 bg-[#1e1e1e] border border-[#333] rounded-xl shadow-xl overflow-hidden z-50">
                     {[
                       { label: "Profile",  action: () => { setProfileOpen(true);  setDropdownOpen(false); } },
                       { label: "Saved",    action: () => { router.push("/saved"); setDropdownOpen(false); } },
@@ -148,13 +149,13 @@ export default function Navbar() {
                 Login
               </button>
             )}
-            <a href="https://www.instagram.com/zikra_io" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition-colors" aria-label="Instagram">
+            <a href="https://www.instagram.com/zikra_io" target="_blank" rel="noopener noreferrer" className="hidden md:block text-gray-400 hover:text-white transition-colors" aria-label="Instagram">
               <InstagramIcon />
             </a>
-            <button className="text-gray-400 hover:text-white transition-colors" aria-label="Facebook">
+            <button className="hidden md:block text-gray-400 hover:text-white transition-colors" aria-label="Facebook">
               <FacebookIcon />
             </button>
-            <button className="text-gray-400 hover:text-white transition-colors" aria-label="Twitter">
+            <button className="hidden md:block text-gray-400 hover:text-white transition-colors" aria-label="Twitter">
               <TwitterIcon />
             </button>
           </div>

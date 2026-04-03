@@ -73,9 +73,9 @@ export default async function HomePage() {
             <p className="text-white font-serif text-2xl mb-2 tracking-wide">Zikra</p>
             <p className="text-gray-500 text-sm mb-6">Your path to remembrance.</p>
             <div className="flex items-center gap-4 text-gray-500">
-              <button className="cursor-default hover:text-gray-300 transition-colors" aria-label="Instagram">
+              <a href="https://www.instagram.com/zikra_io" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300 transition-colors" aria-label="Instagram">
                 <InstagramIcon />
-              </button>
+              </a>
               <button className="cursor-default hover:text-gray-300 transition-colors" aria-label="Facebook">
                 <FacebookIcon />
               </button>

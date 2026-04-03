@@ -68,8 +68,8 @@ function HistoryPageInner() {
         />
       )}
 
-      <div className="min-h-screen bg-[#3d3d3d]">
-        <div className="max-w-3xl mx-auto px-4 py-10">
+      <div className="min-h-screen bg-[#3d3d3d] overflow-x-hidden">
+        <div className="w-full max-w-3xl mx-auto px-4 py-10">
 
           <div className="text-center mb-10">
             <h1 className="text-3xl font-bold text-white mb-1">History</h1>
@@ -107,7 +107,7 @@ function HistoryPageInner() {
               <div className="grid gap-2">
                 {quranHistory.map((v) => (
                   <button key={v.id} onClick={() => router.push(`/quran/${v.surahNum}`)}
-                    className="flex items-center gap-4 bg-[#4a4a4a] rounded-xl p-4 border border-transparent hover:border-[#888] transition-all text-left w-full"
+                    className="flex items-center gap-3 bg-[#4a4a4a] rounded-xl p-4 border border-transparent hover:border-[#888] transition-all text-left w-full overflow-hidden"
                   >
                     <div className="w-11 h-11 flex items-center justify-center bg-[#5a5a5a] rounded-full text-[#c8c8c8] font-bold text-sm flex-shrink-0">
                       {v.surahNum}
@@ -131,7 +131,7 @@ function HistoryPageInner() {
               <div className="grid gap-2">
                 {aiChats.map((chat) => (
                   <button key={chat.id} onClick={() => setResumeChat(chat)}
-                    className="flex items-center gap-4 bg-[#4a4a4a] rounded-xl p-4 border border-transparent hover:border-[#6b9fff] transition-all text-left w-full"
+                    className="flex items-center gap-3 bg-[#4a4a4a] rounded-xl p-4 border border-transparent hover:border-[#6b9fff] transition-all text-left w-full overflow-hidden"
                   >
                     <div className="w-11 h-11 flex items-center justify-center bg-[#5a5a5a] rounded-full text-gray-300 flex-shrink-0">
                       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

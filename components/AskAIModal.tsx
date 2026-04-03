@@ -110,10 +110,10 @@ export default function AskAIModal({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 md:backdrop-blur-sm"
       onMouseDown={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
-      <div className="relative w-[500px] max-w-[92vw] bg-[#1e1e1e] rounded-2xl shadow-2xl border border-[#333] flex flex-col" style={{ height: "75vh" }}>
+      <div className="relative bg-[#1e1e1e] flex flex-col w-full h-full md:w-[500px] md:max-w-[92vw] md:h-[75vh] md:rounded-2xl md:border md:border-[#333] md:shadow-2xl">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#333] flex-shrink-0">

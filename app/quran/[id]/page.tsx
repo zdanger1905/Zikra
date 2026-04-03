@@ -119,7 +119,7 @@ export default function SurahPage() {
   // Per-verse DOM refs for scroll-into-view
   const verseRefs = useRef<Record<number, HTMLDivElement | null>>({});
   // Sidebar + scroll state
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(typeof window !== "undefined" ? window.innerWidth >= 768 : true);
   const [scrolled, setScrolled] = useState(false);
   // Player UI state
   const [playerOpen, setPlayerOpen] = useState(false);
@@ -457,7 +457,7 @@ export default function SurahPage() {
         open={sidebarOpen}
         scrolled={scrolled}
       />
-      <div className={`transition-[margin] duration-300 ${sidebarOpen ? "ml-72" : "ml-0"} ${theme === "dark" ? "bg-[#4a4a4a]" : "bg-white"} min-h-screen`}>
+      <div className={`transition-[margin] duration-300 ${sidebarOpen ? "md:ml-72" : "ml-0"} ${theme === "dark" ? "bg-[#4a4a4a]" : "bg-white"} min-h-screen`}>
       <div className="max-w-3xl mx-auto px-4 pt-20 pb-10">
 
       {/* Prev / next surah arrows */}
@@ -465,7 +465,7 @@ export default function SurahPage() {
         <Link
           href={`/quran/${prevId}`}
           title="Previous surah"
-          className="fixed left-2 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center w-10 h-10 bg-[#3a3a3a] border border-[#555] rounded-full shadow-md text-gray-300 hover:bg-[#4a4a4a] transition-colors"
+          className="hidden md:flex fixed left-2 top-1/2 -translate-y-1/2 z-20 items-center justify-center w-10 h-10 bg-[#3a3a3a] border border-[#555] rounded-full shadow-md text-gray-300 hover:bg-[#4a4a4a] transition-colors"
         >
           <ChevronLeftIcon className="w-5 h-5" />
         </Link>
@@ -474,7 +474,7 @@ export default function SurahPage() {
         <Link
           href={`/quran/${nextId}`}
           title="Next surah"
-          className="fixed right-2 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center w-10 h-10 bg-[#3a3a3a] border border-[#555] rounded-full shadow-md text-gray-300 hover:bg-[#4a4a4a] transition-colors"
+          className="hidden md:flex fixed right-2 top-1/2 -translate-y-1/2 z-20 items-center justify-center w-10 h-10 bg-[#3a3a3a] border border-[#555] rounded-full shadow-md text-gray-300 hover:bg-[#4a4a4a] transition-colors"
         >
           <ChevronRightIcon className="w-5 h-5" />
         </Link>
@@ -827,8 +827,11 @@ function FootnoteModal({
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
       className="fixed inset-0 z-50 bg-black/50"
     >
-      {/* ── Main footnote panel — always centered ── */}
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-[32rem] max-h-[80vh] overflow-y-auto p-6">
+      {/* ── Wrapper: stacks vertically on mobile, side-by-side on desktop ── */}
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col md:flex-row md:items-start gap-3 max-h-[90vh] max-w-[92vw] overflow-y-auto">
+
+      {/* ── Main footnote panel ── */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-[32rem] max-w-full max-h-[80vh] overflow-y-auto p-6 flex-shrink-0">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
@@ -868,9 +871,9 @@ function FootnoteModal({
         )}
       </div>
 
-      {/* ── Referenced ayahs — positioned to the right of center ── */}
+      {/* ── Referenced ayahs ── */}
       {activeRefs.length > 0 && (
-        <div className="absolute left-[calc(50%+17rem)] top-1/2 -translate-y-1/2 ml-4 flex flex-col gap-3 w-96 max-h-[80vh] overflow-y-auto">
+        <div className="flex flex-col gap-3 w-full md:w-96 flex-shrink-0">
           {activeRefs.map((ref) => (
             <div key={ref.uid} className="bg-gray-100 dark:bg-gray-700 rounded-2xl shadow-lg p-4 relative">
               <button
@@ -930,6 +933,7 @@ function FootnoteModal({
           ))}
         </div>
       )}
+      </div>{/* end wrapper */}
     </div>
   );
 }
