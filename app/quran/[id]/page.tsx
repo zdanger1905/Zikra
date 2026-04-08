@@ -74,6 +74,10 @@ export default function SurahPage() {
   const [arabic, setArabic] = useState<SurahEdition | null>(null);
   const [asadData, setAsadData] = useState<AsadData | null>(null);
   const [activeFootnote, setActiveFootnote] = useState<AsadFootnote | null>(null);
+  useEffect(() => {
+    document.body.style.overflow = activeFootnote ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [activeFootnote]);
   const [wordData, setWordData] = useState<Record<number, WordEntry[]> | null>(null);
   const [audioData, setAudioData] = useState<Record<string, VerseAudio> | null>(null);
   const [loading, setLoading] = useState(true);
