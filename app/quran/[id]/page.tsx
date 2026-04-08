@@ -176,11 +176,19 @@ export default function SurahPage() {
   useEffect(() => { loopCountRef.current = loopCount; }, [loopCount]);
   useEffect(() => { playingVerseRef.current = playingVerse; }, [playingVerse]);
 
-  // Scroll playing verse into view when it changes
+  // Suppress auto-scroll when user clicks a word in the already-playing verse
+  const suppressScrollRef = useRef(false);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced scroll — cancels pending scroll before starting, prevents up/down glitch
   useEffect(() => {
-    if (playingVerse !== null) {
+    if (playingVerse === null) return;
+    if (suppressScrollRef.current) { suppressScrollRef.current = false; return; }
+    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    scrollTimerRef.current = setTimeout(() => {
       verseRefs.current[playingVerse]?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
+    }, 80);
+    return () => { if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current); };
   }, [playingVerse]);
 
   // Scroll to verse from topic search (?verse=N) after surah renders
@@ -631,13 +639,32 @@ export default function SurahPage() {
                   activeWord={activeWord}
                   playingWordIdx={playingVerse === ayah.numberInSurah ? playingWordIdx : null}
                   theme={theme}
-                  onWordClick={(verseNum, wordIdx) =>
+                  onWordClick={(verseNum, wordIdx) => {
+                    // If player is running, seek to this word's timestamp
+                    if (chapterAudioRef.current && audioDataRef.current) {
+                      const verseKey = `${surahNumRef.current}:${verseNum}`;
+                      const timing = audioDataRef.current[verseKey];
+                      if (timing) {
+                        // segments: [[wordPos1Based, startMs, endMs], ...]
+                        const seg = timing.segments.find(s => s[0] === wordIdx + 1);
+                        const seekMs = seg ? seg[1] : timing.timestampFrom;
+                        chapterAudioRef.current.currentTime = seekMs / 1000;
+                        if (chapterAudioRef.current.paused) chapterAudioRef.current.play().catch(() => {});
+                        // Suppress scroll only if already on this verse (user clicked within the visible verse)
+                        if (playingVerseRef.current === verseNum) suppressScrollRef.current = true;
+                        setPlayingVerse(verseNum);
+                        playingVerseRef.current = verseNum;
+                        setIsPlaying(true);
+                        return;
+                      }
+                    }
+                    // Otherwise toggle tooltip
                     setActiveWord(
                       activeWord?.verseNum === verseNum && activeWord?.wordIdx === wordIdx
                         ? null
                         : { verseNum, wordIdx }
-                    )
-                  }
+                    );
+                  }}
                   onClose={() => setActiveWord(null)}
                 />
               )}
