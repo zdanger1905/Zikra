@@ -215,14 +215,43 @@ export function timeAgo(date: Date): string {
 
 // Fuzzy match: returns true if all characters of `query` appear in `target` in order.
 // Also returns true for exact substring matches (handles typos by letter order).
+// Normalize Arabic transliteration so "kafirun" matches "Al-Kaafiroon", etc.
+function normalizeTranslit(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[-'\u2018\u2019`\s]/g, "")   // strip separators
+    .replace(/^(al|an|ar|as|at|az|ash|ad|adh|ath|aali)/i, "") // strip Arabic article variants
+    .replace(/aa/g, "a")                    // long vowels → short
+    .replace(/ee|ii/g, "i")
+    .replace(/oo|uu/g, "u")
+    .replace(/th/g, "t")                    // consonant simplifications
+    .replace(/kh/g, "k")
+    .replace(/gh/g, "g")
+    .replace(/sh/g, "s")
+    .replace(/dh/g, "d")
+    .replace(/[h]/g, "h");
+}
+
 export function fuzzyMatch(target: string, query: string): boolean {
   if (!query) return true;
-  const t = target.toLowerCase();
-  const q = query.toLowerCase();
+  // Strip hyphens and apostrophes so "al fatiha" matches "Al-Faatiha"
+  const normalize = (s: string) => s.toLowerCase().replace(/[-'\u2018\u2019`]/g, " ").replace(/\s+/g, " ").trim();
+  const t = normalize(target);
+  const q = normalize(query);
   // Exact substring — fast path
   if (t.includes(q)) return true;
-  // Sequential character match
+  // Transliteration-normalized match ("kafirun" → "kafirun" matches "Al-Kaafiroon" → "kafirun")
+  const tn = normalizeTranslit(target);
+  const qn = normalizeTranslit(query);
+  if (tn.includes(qn) || qn.includes(tn)) return true;
+  // Sequential character match on normalized translit
   let qi = 0;
+  for (let i = 0; i < tn.length && qi < qn.length; i++) {
+    if (tn[i] === qn[qi]) qi++;
+  }
+  if (qi === qn.length && qn.length > 0) return true;
+  // Sequential character match on original
+  qi = 0;
   for (let i = 0; i < t.length && qi < q.length; i++) {
     if (t[i] === q[qi]) qi++;
   }

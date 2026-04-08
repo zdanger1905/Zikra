@@ -13,7 +13,7 @@ import {
 } from "@/lib/asadQuran";
 import AskAIModal from "@/components/AskAIModal";
 import { auth } from "@/lib/firebase";
-import { saveVerse, unsaveVerse, getSavedVerseKeys } from "@/lib/history";
+import { saveVerse, unsaveVerse, getSavedVerseKeys, fuzzyMatch } from "@/lib/history";
 import AuthModal from "@/components/AuthModal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -1401,8 +1401,8 @@ function SurahMenu({
 
   const filtered = surahs.filter(
     (s) =>
-      s.englishName.toLowerCase().includes(search.toLowerCase()) ||
-      s.englishNameTranslation.toLowerCase().includes(search.toLowerCase()) ||
+      fuzzyMatch(s.englishName, search) ||
+      fuzzyMatch(s.englishNameTranslation, search) ||
       s.number.toString().includes(search)
   );
 
