@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   updateProfile,
   verifyBeforeUpdateEmail,
@@ -63,6 +63,11 @@ function SaveButton({ onClick, loading }: { onClick: () => void; loading: boolea
 }
 
 export default function ProfileModal({ user, onClose }: ProfileModalProps) {
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
   const isGoogle = user.providerData[0]?.providerId === "google.com";
 
   // Name

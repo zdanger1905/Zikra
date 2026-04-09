@@ -1301,8 +1301,14 @@ function SurahBanner({
       if (modalRef.current && !modalRef.current.contains(e.target as Node))
         setSettingsOpen(false);
     }
-    if (settingsOpen) document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
+    if (settingsOpen) {
+      document.addEventListener("mousedown", onClickOutside);
+      document.body.style.overflow = "hidden";
+    }
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.body.style.overflow = "";
+    };
   }, [settingsOpen]);
 
   return (
