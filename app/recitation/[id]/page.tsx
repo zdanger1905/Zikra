@@ -756,7 +756,7 @@ export default function RecitationPage() {
       </div>
 
       {/* ── Center: Arabic text ── */}
-      <div className="md:ml-64 md:mr-56 min-h-screen pt-14 pb-28 px-4 md:px-14">
+      <div className="md:ml-64 md:mr-56 min-h-screen pt-6 pb-28 px-4 md:px-14">
         {loading && (
           <div className="flex items-center justify-center h-[60vh]">
             <div className="w-10 h-10 border-4 border-gray-400 border-t-transparent rounded-full animate-spin" />
