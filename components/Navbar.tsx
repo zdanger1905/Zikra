@@ -12,6 +12,7 @@ const navLinks = [
   { href: "/quran", label: "Quran" },
   { href: "/prayer-times", label: "Prayer Times" },
   { href: "/recitation/1", label: "Recitation" },
+  { href: "/adhan", label: "Adhan" },
 ];
 
 function InstagramIcon() {

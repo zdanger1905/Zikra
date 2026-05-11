@@ -57,7 +57,7 @@ export default async function HomePage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-2xl mx-auto">
           <FeatureCard href="/quran" title="The Holy Quran" description="Browse all 114 surahs with Arabic text and translation." icon={<QuranIcon />} />
           <FeatureCard href="/prayer-times" title="Prayer Times" description="Accurate daily prayer times based on your location." icon={<MoonIcon />} />
-          <DeadCard title="Books" description="Curated Islamic literature and reading." icon={<BooksIcon />} />
+          <FeatureCard href="/adhan" title="Adhan" description="Automatically play the adhan on your Sonos at every prayer time." icon={<AdhanIcon />} />
           <FeatureCard href="/recitation" title="Recitation" description="Arabic-only reader with audio, word highlighting, and loop practice." icon={<RecitationIcon />} />
         </div>
       </section>
@@ -93,7 +93,7 @@ export default async function HomePage() {
             </div>
             <div className="flex flex-col gap-3">
               <Link href="/recitation" className="text-gray-400 hover:text-white transition-colors underline">Recitation</Link>
-              <span className="text-gray-600 underline cursor-default select-none">Books</span>
+              <Link href="/adhan" className="text-gray-400 hover:text-white transition-colors underline">Adhan</Link>
             </div>
           </div>
         </div>
@@ -147,10 +147,10 @@ function MoonIcon() {
   );
 }
 
-function BooksIcon() {
+function AdhanIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.429 9.75 2.25 12l4.179 2.25m0-4.5 5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0 4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0-5.571 3-5.571-3" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
     </svg>
   );
 }
