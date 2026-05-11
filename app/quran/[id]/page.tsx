@@ -125,6 +125,18 @@ export default function SurahPage() {
   // Sidebar + scroll state
   const [sidebarOpen, setSidebarOpen] = useState(typeof window !== "undefined" ? window.innerWidth >= 768 : true);
   const [scrolled, setScrolled] = useState(false);
+  // Verse scroll slider — all DOM-direct to avoid re-render jank
+  const BANNER_H = 112; // px: main nav (48) + surah banner (64)
+  const [sliderActive, setSliderActive] = useState(false);
+  const sliderActiveRef = useRef(false);
+  const lastProgressRef = useRef(0);
+  const sliderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDraggingSliderRef = useRef(false);
+  const isHoveringSliderRef = useRef(false);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const thumbRef = useRef<HTMLDivElement | null>(null);
+  const badgeRef = useRef<HTMLDivElement | null>(null);
+  const badgeTextRef = useRef<HTMLDivElement | null>(null);
   // Player UI state
   const [playerOpen, setPlayerOpen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -153,14 +165,49 @@ export default function SurahPage() {
   }, []);
 
   // Fetch placement lookup once (global, not per-surah)
-  // Track scroll for banner visibility
+  // Track scroll for banner visibility + verse slider
   useEffect(() => {
+    function updateSliderDOM(progress: number, verse: number) {
+      lastProgressRef.current = progress;
+      const thumb = thumbRef.current;
+      const track = trackRef.current;
+      if (!thumb || !track) return;
+      const trackH = track.clientHeight;
+      const thumbH = Math.max(30, (window.innerHeight / document.documentElement.scrollHeight) * trackH);
+      thumb.style.height = `${thumbH}px`;
+      const topPx = Math.round(progress * (trackH - thumbH));
+      thumb.style.top = `${topPx}px`;
+      if (badgeRef.current) badgeRef.current.style.top = `${topPx + thumbH / 2}px`;
+      if (badgeTextRef.current) badgeTextRef.current.textContent = String(verse);
+    }
+
     function onScroll() {
       setScrolled(window.scrollY > 10);
+      if (isDraggingSliderRef.current) return;
+
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = maxScroll > 0 ? window.scrollY / maxScroll : 0;
+
+      const threshold = window.innerHeight * 0.4;
+      let best = 1;
+      for (const [num, el] of Object.entries(verseRefs.current)) {
+        if (!el) continue;
+        if (el.getBoundingClientRect().top <= threshold) best = Number(num);
+      }
+      updateSliderDOM(progress, best);
+
+      setSliderActive(true);
+      if (sliderTimerRef.current) clearTimeout(sliderTimerRef.current);
+      sliderTimerRef.current = setTimeout(() => { if (!isHoveringSliderRef.current) setSliderActive(false); }, 1200);
     }
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (sliderTimerRef.current) clearTimeout(sliderTimerRef.current);
+    };
   }, []);
+
+  useEffect(() => { sliderActiveRef.current = sliderActive; }, [sliderActive]);
 
   // Keep stable refs in sync
   useEffect(() => { audioDataRef.current = audioData; }, [audioData]);
@@ -409,6 +456,54 @@ export default function SurahPage() {
     const next = Math.max(1, Math.min(numberOfAyahsRef.current, current + delta));
     playVerse(next, true);
   }, [playVerse]);
+
+  const handleTrackPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const track = trackRef.current;
+    if (!track) return;
+    isDraggingSliderRef.current = true;
+    setSliderActive(true);
+    if (sliderTimerRef.current) clearTimeout(sliderTimerRef.current);
+    track.setPointerCapture(e.pointerId);
+
+    function updateFromY(clientY: number) {
+      const rect = track!.getBoundingClientRect();
+      const progress = Math.max(0, Math.min((clientY - rect.top) / rect.height, 1));
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      window.scrollTo({ top: progress * maxScroll });
+
+      const threshold = window.innerHeight * 0.4;
+      let best = 1;
+      for (const [num, el] of Object.entries(verseRefs.current)) {
+        if (!el) continue;
+        if (el.getBoundingClientRect().top <= threshold) best = Number(num);
+      }
+      lastProgressRef.current = progress;
+      const thumb = thumbRef.current;
+      if (thumb) {
+        const trackH = track!.clientHeight;
+        const thumbH = Math.max(30, (window.innerHeight / document.documentElement.scrollHeight) * trackH);
+        thumb.style.height = `${thumbH}px`;
+        const topPx = Math.round(progress * (trackH - thumbH));
+        thumb.style.top = `${topPx}px`;
+        if (badgeRef.current) badgeRef.current.style.top = `${topPx + thumbH / 2}px`;
+      }
+      if (badgeTextRef.current) badgeTextRef.current.textContent = String(best);
+    }
+
+    updateFromY(e.clientY);
+
+    function onMove(ev: PointerEvent) { updateFromY(ev.clientY); }
+    function onUp() {
+      isDraggingSliderRef.current = false;
+      if (sliderTimerRef.current) clearTimeout(sliderTimerRef.current);
+      sliderTimerRef.current = setTimeout(() => { if (!isHoveringSliderRef.current) setSliderActive(false); }, 1200);
+      track!.removeEventListener("pointermove", onMove);
+      track!.removeEventListener("pointerup", onUp);
+    }
+    track.addEventListener("pointermove", onMove);
+    track.addEventListener("pointerup", onUp);
+  }, []);
 
   // Bismillah header: show for all except Al-Fatiha (verse 1 IS Bismillah) and At-Tawbah (no Bismillah)
   const showBismillahHeader = surahNum !== 1 && surahNum !== 9;
@@ -768,6 +863,68 @@ export default function SurahPage() {
       )}
       </div>
       </div>
+
+      {/* Verse scroll slider */}
+      {arabic.numberOfAyahs > 1 && (
+        <div
+          className="fixed right-0 z-20 pointer-events-none"
+          style={{ top: BANNER_H, bottom: 0 }}
+        >
+          {/* Verse number badge */}
+          <div
+            ref={badgeRef}
+            className="absolute pointer-events-none"
+            style={{
+              top: 0,
+              right: 12,
+              transform: "translateY(-50%)",
+              opacity: sliderActive ? 1 : 0,
+              transition: "opacity 0.2s ease",
+            }}
+          >
+            <div ref={badgeTextRef} className="bg-[#3a3a3a] text-white text-xs font-medium px-2 py-0.5 rounded-md shadow-md whitespace-nowrap">
+              1
+            </div>
+          </div>
+
+          {/* Track */}
+          <div
+            ref={trackRef}
+            className="absolute right-0 top-0 bottom-0 pointer-events-auto"
+            style={{
+              width: sliderActive ? 8 : 3,
+              backgroundColor: sliderActive ? "rgba(120,120,120,0.4)" : "rgba(120,120,120,0.15)",
+              transition: "width 0.2s ease, background-color 0.2s ease",
+            }}
+            onPointerDown={handleTrackPointerDown}
+            onMouseEnter={() => {
+              isHoveringSliderRef.current = true;
+              if (sliderTimerRef.current) clearTimeout(sliderTimerRef.current);
+              setSliderActive(true);
+            }}
+            onMouseLeave={() => {
+              isHoveringSliderRef.current = false;
+              if (!isDraggingSliderRef.current) {
+                sliderTimerRef.current = setTimeout(() => setSliderActive(false), 300);
+              }
+            }}
+          >
+            {/* Thumb */}
+            <div
+              ref={thumbRef}
+              className="absolute left-0 right-0"
+              style={{
+                top: 0,
+                height: 40,
+                backgroundColor: sliderActive ? "#6b9fff" : "rgba(150,150,150,0.5)",
+                borderRadius: 99,
+                transition: "background-color 0.2s ease",
+                pointerEvents: "none",
+              }}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }
