@@ -85,8 +85,12 @@ export default function AuthModal({ onClose }: AuthModalProps) {
       }
       onClose();
     } catch (err: any) {
-      const msg = friendlyError(err.code ?? "");
-      setError(msg === "google-linked" ? "google-linked" : msg);
+      const code = err.code ?? "";
+      if (tab === "login" && (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found")) {
+        setError("google-linked");
+      } else {
+        setError(friendlyError(code));
+      }
     } finally {
       setLoading(false);
     }
@@ -191,7 +195,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
 
             {error === "google-linked" ? (
               <div className="bg-[#2a2a2a] border border-[#444] rounded-xl px-4 py-3 text-center space-y-2">
-                <p className="text-yellow-400 text-xs">This email is linked to a Google account. Please sign in with Google instead.</p>
+                <p className="text-red-400 text-xs">Incorrect email or password. If you signed up with Google, use the button below.</p>
                 <button
                   type="button"
                   onClick={handleGoogle}
