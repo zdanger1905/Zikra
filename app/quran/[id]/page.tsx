@@ -567,26 +567,6 @@ export default function SurahPage() {
       <div className={`transition-[margin] duration-300 ${sidebarOpen ? "md:ml-72" : "ml-0"} ${theme === "dark" ? "bg-[#4a4a4a]" : "bg-white"} min-h-screen`}>
       <div className="max-w-3xl mx-auto px-4 pt-20 pb-10">
 
-      {/* Prev / next surah arrows */}
-      {prevId && (
-        <Link
-          href={`/quran/${prevId}`}
-          title="Previous surah"
-          className="hidden md:flex fixed left-2 top-1/2 -translate-y-1/2 z-20 items-center justify-center w-10 h-10 bg-[#3a3a3a] border border-[#555] rounded-full shadow-md text-gray-300 hover:bg-[#4a4a4a] transition-colors"
-        >
-          <ChevronLeftIcon className="w-5 h-5" />
-        </Link>
-      )}
-      {nextId && (
-        <Link
-          href={`/quran/${nextId}`}
-          title="Next surah"
-          className="hidden md:flex fixed right-2 top-1/2 -translate-y-1/2 z-20 items-center justify-center w-10 h-10 bg-[#3a3a3a] border border-[#555] rounded-full shadow-md text-gray-300 hover:bg-[#4a4a4a] transition-colors"
-        >
-          <ChevronRightIcon className="w-5 h-5" />
-        </Link>
-      )}
-
       {/* Header */}
       <div className="text-center mb-8">
         <p className={`arabic text-5xl leading-loose mb-2 ${theme === "dark" ? "text-white" : "text-gray-800"}`}>
@@ -873,16 +853,18 @@ export default function SurahPage() {
           {/* Verse number badge */}
           <div
             ref={badgeRef}
-            className="absolute pointer-events-none"
+            className="absolute pointer-events-auto"
             style={{
               top: 0,
-              right: 12,
+              right: 14,
               transform: "translateY(-50%)",
               opacity: sliderActive ? 1 : 0,
               transition: "opacity 0.2s ease",
+              cursor: "grab",
             }}
+            onPointerDown={handleTrackPointerDown}
           >
-            <div ref={badgeTextRef} className="bg-[#3a3a3a] text-white text-xs font-medium px-2 py-0.5 rounded-md shadow-md whitespace-nowrap">
+            <div ref={badgeTextRef} className="bg-[#3a3a3a] text-white text-xs font-medium px-2 py-0.5 rounded-md shadow-md whitespace-nowrap select-none">
               1
             </div>
           </div>
@@ -892,7 +874,7 @@ export default function SurahPage() {
             ref={trackRef}
             className="absolute right-0 top-0 bottom-0 pointer-events-auto"
             style={{
-              width: sliderActive ? 8 : 3,
+              width: sliderActive ? 12 : 5,
               backgroundColor: sliderActive ? "rgba(120,120,120,0.4)" : "rgba(120,120,120,0.15)",
               transition: "width 0.2s ease, background-color 0.2s ease",
             }}
