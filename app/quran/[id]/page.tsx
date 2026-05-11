@@ -847,48 +847,46 @@ export default function SurahPage() {
       {/* Verse scroll slider */}
       {arabic.numberOfAyahs > 1 && (
         <div
-          className="fixed right-0 z-20 pointer-events-none"
-          style={{ top: BANNER_H, bottom: 0 }}
+          ref={trackRef}
+          className="fixed right-0 z-20"
+          style={{ top: BANNER_H, bottom: 0, width: 32, touchAction: "none", cursor: "pointer" }}
+          onPointerDown={handleTrackPointerDown}
+          onMouseEnter={() => {
+            isHoveringSliderRef.current = true;
+            if (sliderTimerRef.current) clearTimeout(sliderTimerRef.current);
+            setSliderActive(true);
+          }}
+          onMouseLeave={() => {
+            isHoveringSliderRef.current = false;
+            if (!isDraggingSliderRef.current) {
+              sliderTimerRef.current = setTimeout(() => setSliderActive(false), 300);
+            }
+          }}
         >
           {/* Verse number badge */}
           <div
             ref={badgeRef}
-            className="absolute pointer-events-auto"
+            className="absolute pointer-events-none select-none"
             style={{
               top: 0,
-              right: 14,
+              right: 16,
               transform: "translateY(-50%)",
               opacity: sliderActive ? 1 : 0,
               transition: "opacity 0.2s ease",
-              cursor: "grab",
             }}
-            onPointerDown={handleTrackPointerDown}
           >
-            <div ref={badgeTextRef} className="bg-[#3a3a3a] text-white text-xs font-medium px-2 py-0.5 rounded-md shadow-md whitespace-nowrap select-none">
+            <div ref={badgeTextRef} className="bg-[#3a3a3a] text-white text-xs font-medium px-2 py-0.5 rounded-md shadow-md whitespace-nowrap">
               1
             </div>
           </div>
 
-          {/* Track */}
+          {/* Visual track bar */}
           <div
-            ref={trackRef}
-            className="absolute right-0 top-0 bottom-0 pointer-events-auto"
+            className="absolute right-0 top-0 bottom-0 pointer-events-none"
             style={{
               width: sliderActive ? 12 : 5,
               backgroundColor: sliderActive ? "rgba(120,120,120,0.4)" : "rgba(120,120,120,0.15)",
               transition: "width 0.2s ease, background-color 0.2s ease",
-            }}
-            onPointerDown={handleTrackPointerDown}
-            onMouseEnter={() => {
-              isHoveringSliderRef.current = true;
-              if (sliderTimerRef.current) clearTimeout(sliderTimerRef.current);
-              setSliderActive(true);
-            }}
-            onMouseLeave={() => {
-              isHoveringSliderRef.current = false;
-              if (!isDraggingSliderRef.current) {
-                sliderTimerRef.current = setTimeout(() => setSliderActive(false), 300);
-              }
             }}
           >
             {/* Thumb */}
@@ -901,7 +899,6 @@ export default function SurahPage() {
                 backgroundColor: sliderActive ? "#6b9fff" : "rgba(150,150,150,0.5)",
                 borderRadius: 99,
                 transition: "background-color 0.2s ease",
-                pointerEvents: "none",
               }}
             />
           </div>
