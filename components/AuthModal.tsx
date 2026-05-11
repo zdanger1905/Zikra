@@ -23,6 +23,7 @@ function friendlyError(code: string): string {
     case "auth/email-already-in-use":    return "An account with this email already exists.";
     case "auth/weak-password":           return "Password must be at least 6 characters.";
     case "auth/too-many-requests":       return "Too many attempts. Please try again later.";
+    case "auth/account-exists-with-different-credential": return "google-linked";
     case "auth/popup-closed-by-user":    return "";
     case "auth/cancelled-popup-request": return "";
     default:                             return "Something went wrong. Please try again.";
@@ -84,7 +85,8 @@ export default function AuthModal({ onClose }: AuthModalProps) {
       }
       onClose();
     } catch (err: any) {
-      setError(friendlyError(err.code ?? ""));
+      const msg = friendlyError(err.code ?? "");
+      setError(msg === "google-linked" ? "google-linked" : msg);
     } finally {
       setLoading(false);
     }
@@ -187,9 +189,21 @@ export default function AuthModal({ onClose }: AuthModalProps) {
               />
             )}
 
-            {error && (
+            {error === "google-linked" ? (
+              <div className="bg-[#2a2a2a] border border-[#444] rounded-xl px-4 py-3 text-center space-y-2">
+                <p className="text-yellow-400 text-xs">This email is linked to a Google account. Please sign in with Google instead.</p>
+                <button
+                  type="button"
+                  onClick={handleGoogle}
+                  className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg border border-[#555] bg-[#333] text-gray-200 text-xs font-medium hover:bg-[#3a3a3a] transition-colors"
+                >
+                  <GoogleIcon />
+                  Sign in with Google
+                </button>
+              </div>
+            ) : error ? (
               <p className="text-red-400 text-xs text-center">{error}</p>
-            )}
+            ) : null}
 
             <button
               type="submit"
