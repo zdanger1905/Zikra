@@ -12,7 +12,7 @@ const navLinks = [
   { href: "/quran", label: "Quran" },
   { href: "/prayer-times", label: "Prayer Times" },
   { href: "/recitation/1", label: "Recitation" },
-  { href: "/adhan", label: "Adhan" },
+  { href: "/adhan", label: "Adhan", comingSoon: true },
 ];
 
 function InstagramIcon() {
@@ -57,7 +57,13 @@ export default function Navbar() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [toast, setToast] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showComingSoon() {
+    setToast(true);
+  }
 
   useEffect(() => {
     return onAuthStateChanged(auth, setUser);
@@ -79,6 +85,24 @@ export default function Navbar() {
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
       {profileOpen && user && <ProfileModal user={user} onClose={() => setProfileOpen(false)} />}
 
+      {toast && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50" onClick={() => setToast(false)}>
+          <div className="relative bg-[#1e1e1e] border border-[#333] rounded-2xl shadow-2xl px-12 py-10 flex flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setToast(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-200 transition-colors"
+              aria-label="Close"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <p className="text-white font-serif text-2xl tracking-wide">Coming Soon</p>
+            <p className="text-gray-500 text-sm text-center">The Adhan feature is on its way.</p>
+          </div>
+        </div>
+      )}
+
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#1a1a1a]">
         <div className="px-4 md:px-8 h-12 flex items-center">
 
@@ -89,19 +113,29 @@ export default function Navbar() {
 
           {/* Nav links — center */}
           <div className="flex-1 hidden md:flex items-center justify-center gap-6">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`text-sm tracking-wide transition-colors whitespace-nowrap ${
-                  pathname.startsWith(link.href === "/recitation/1" ? "/recitation" : link.href)
-                    ? "text-white underline underline-offset-4"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
+            {navLinks.map((link) =>
+              link.comingSoon ? (
+                <button
+                  key={link.href}
+                  onClick={showComingSoon}
+                  className="text-sm tracking-wide transition-colors whitespace-nowrap text-gray-400 hover:text-white"
+                >
+                  {link.label}
+                </button>
+              ) : (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`text-sm tracking-wide transition-colors whitespace-nowrap ${
+                    pathname.startsWith(link.href === "/recitation/1" ? "/recitation" : link.href)
+                      ? "text-white underline underline-offset-4"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              )
+            )}
           </div>
 
           {/* Right side */}

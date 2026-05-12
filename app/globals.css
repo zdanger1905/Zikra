@@ -46,6 +46,17 @@ body::-webkit-scrollbar {
   display: none;
 }
 
+@keyframes fade-in-out {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  15%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+  75%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.animate-fade-in-out {
+  animation: fade-in-out 2.5s ease forwards;
+}
+
 .arabic {
   font-family: 'ArabicFont', 'Hafs', 'Noto Nastaliq Urdu', 'Amiri', serif;
   direction: rtl;
