@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(find c:\\\\\\\\Users\\\\\\\\zaydi\\\\\\\\muslim-hub -type f -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.jsx\" -o -name \"*.js\")",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(npm install *)"
     ]
   }
 }
