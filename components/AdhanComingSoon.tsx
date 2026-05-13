@@ -33,7 +33,7 @@ export function AdhanFeatureCard({ icon }: { icon: React.ReactNode }) {
       {open && <Modal onClose={() => setOpen(false)} />}
       <button
         onClick={() => setOpen(true)}
-        className="group relative block w-full text-left bg-gradient-to-br from-[#505050] to-[#383838] border border-[#606060] hover:border-[#909090] text-white rounded-2xl p-8 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300 overflow-hidden"
+        className="group relative block w-full bg-gradient-to-br from-[#505050] to-[#383838] border border-[#606060] hover:border-[#909090] text-white rounded-2xl p-8 shadow-lg hover:-translate-y-1 hover:shadow-xl transition-all duration-300 overflow-hidden"
       >
         <div className="absolute inset-0 bg-white/0 group-hover:bg-white/5 transition-all duration-300 rounded-2xl" />
         <div className="relative z-10">
@@ -54,7 +54,7 @@ export function AdhanFooterLink() {
       {open && <Modal onClose={() => setOpen(false)} />}
       <button
         onClick={() => setOpen(true)}
-        className="text-gray-400 hover:text-white transition-colors underline"
+        className="text-left text-gray-400 hover:text-white transition-colors underline"
       >
         Adhan
       </button>

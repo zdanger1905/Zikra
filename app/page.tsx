@@ -58,8 +58,8 @@ export default async function HomePage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-2xl mx-auto">
           <FeatureCard href="/quran" title="The Holy Quran" description="Browse all 114 surahs with Arabic text and translation." icon={<QuranIcon />} />
           <FeatureCard href="/prayer-times" title="Prayer Times" description="Accurate daily prayer times based on your location." icon={<MoonIcon />} />
-          <AdhanFeatureCard icon={<AdhanIcon />} />
           <FeatureCard href="/recitation" title="Recitation" description="Arabic-only reader with audio, word highlighting, and loop practice." icon={<RecitationIcon />} />
+          <AdhanFeatureCard icon={<AdhanIcon />} />
         </div>
       </section>
 
