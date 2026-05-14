@@ -189,7 +189,7 @@ export default function AskAIModal({
               <div className="flex gap-4">
                 {/* FAQ */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-gray-500 text-xs font-medium mb-2">FAQ</p>
+                  <p className="text-gray-500 text-xs font-medium mb-2">Quick Prompts</p>
                   <div className="flex flex-col gap-2">
                     {[
                       "What is the historical context?",
@@ -229,7 +229,7 @@ export default function AskAIModal({
               </div>
 
               <p className="text-gray-600 text-sm text-center mt-3">
-                Ask anything about this verse — its meaning, context, or related teachings.
+                Ask Zikra anything about this verse — its meaning, context, or related teachings.
               </p>
             </div>
           )}

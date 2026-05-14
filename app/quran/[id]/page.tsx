@@ -694,13 +694,15 @@ export default function SurahPage() {
                       const translation = parsed?.segments.filter(s => s.type === "text").map(s => s.content).join("") ?? "";
                       setAiVerse({ verseNum: ayah.numberInSurah, translation, arabic: ayah.text });
                     }}
-                    title="Ask AI about this verse"
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#5a5a5a] text-gray-300 hover:bg-[#6b9fff] hover:text-white transition-colors text-xs font-medium"
+                    title="Ask Zikra AI about this verse"
+                    className="group flex items-center overflow-hidden rounded-full bg-[#5a5a5a] hover:bg-[#6b9fff] text-gray-300 hover:text-white transition-all duration-300 w-7 h-7 hover:w-[5.5rem] flex-shrink-0"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    Ask AI
+                    <span className="flex-shrink-0 flex items-center justify-center w-7 h-7 font-bold text-xs">
+                      AI
+                    </span>
+                    <span className="text-xs font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 pr-2.5 -ml-0.5">
+                      Ask Zikra
+                    </span>
                   </button>
                 </div>
               </div>
@@ -1104,6 +1106,7 @@ function FootnoteModal({
     </div>
   );
 }
+
 
 // ─── ArabicWords ──────────────────────────────────────────────────────────────
 
