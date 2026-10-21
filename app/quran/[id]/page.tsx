@@ -1323,8 +1323,8 @@ function BottomPlayer({
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center">
       <div className="relative flex items-center gap-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full shadow-2xl px-5 py-3">
 
-        {/* Left edge: ellipsis menu */}
-        <div ref={menuRef} className="relative">
+        {/* Left edge: ellipsis menu. Not `relative`, so the popup positions against the whole player. */}
+        <div ref={menuRef}>
           <button
             onClick={() => setMenuOpen((v) => !v)}
             className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
@@ -1333,9 +1333,9 @@ function BottomPlayer({
             <EllipsisIcon className="w-5 h-5" />
           </button>
 
-          {/* Popup menu — anchored above left edge */}
+          {/* Popup menu — centred above the player (which is centred on screen) */}
           {menuOpen && (
-            <div className="absolute bottom-full left-0 mb-4 w-72 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 p-4 space-y-5">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-72 max-w-[calc(100vw-32px)] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 p-4 space-y-5">
               {/* Speed */}
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
