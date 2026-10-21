@@ -457,53 +457,81 @@ export default function SurahPage() {
     playVerse(next, true);
   }, [playVerse]);
 
-  const handleTrackPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
+  // Scrolls the page to `progress` (0–1) and moves the thumb and verse badge to match.
+  const scrollToProgress = useCallback((progress: number) => {
     const track = trackRef.current;
     if (!track) return;
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    window.scrollTo({ top: progress * maxScroll });
+
+    const threshold = window.innerHeight * 0.4;
+    let best = 1;
+    for (const [num, el] of Object.entries(verseRefs.current)) {
+      if (!el) continue;
+      if (el.getBoundingClientRect().top <= threshold) best = Number(num);
+    }
+    lastProgressRef.current = progress;
+    const thumb = thumbRef.current;
+    if (thumb) {
+      const trackH = track.clientHeight;
+      const thumbH = Math.max(30, (window.innerHeight / document.documentElement.scrollHeight) * trackH);
+      thumb.style.height = `${thumbH}px`;
+      const topPx = Math.round(progress * (trackH - thumbH));
+      thumb.style.top = `${topPx}px`;
+      if (badgeRef.current) badgeRef.current.style.top = `${topPx + thumbH / 2}px`;
+    }
+    if (badgeTextRef.current) badgeTextRef.current.textContent = String(best);
+  }, []);
+
+  // Tracks a drag on `target` until release, mapping pointer Y to scroll progress.
+  const beginSliderDrag = useCallback((target: HTMLElement, pointerId: number, toProgress: (clientY: number) => number) => {
     isDraggingSliderRef.current = true;
     setSliderActive(true);
     if (sliderTimerRef.current) clearTimeout(sliderTimerRef.current);
-    track.setPointerCapture(e.pointerId);
+    target.setPointerCapture(pointerId);
 
-    function updateFromY(clientY: number) {
-      const rect = track!.getBoundingClientRect();
-      const progress = Math.max(0, Math.min((clientY - rect.top) / rect.height, 1));
-      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-      window.scrollTo({ top: progress * maxScroll });
-
-      const threshold = window.innerHeight * 0.4;
-      let best = 1;
-      for (const [num, el] of Object.entries(verseRefs.current)) {
-        if (!el) continue;
-        if (el.getBoundingClientRect().top <= threshold) best = Number(num);
-      }
-      lastProgressRef.current = progress;
-      const thumb = thumbRef.current;
-      if (thumb) {
-        const trackH = track!.clientHeight;
-        const thumbH = Math.max(30, (window.innerHeight / document.documentElement.scrollHeight) * trackH);
-        thumb.style.height = `${thumbH}px`;
-        const topPx = Math.round(progress * (trackH - thumbH));
-        thumb.style.top = `${topPx}px`;
-        if (badgeRef.current) badgeRef.current.style.top = `${topPx + thumbH / 2}px`;
-      }
-      if (badgeTextRef.current) badgeTextRef.current.textContent = String(best);
-    }
-
-    updateFromY(e.clientY);
-
-    function onMove(ev: PointerEvent) { updateFromY(ev.clientY); }
+    function onMove(ev: PointerEvent) { scrollToProgress(toProgress(ev.clientY)); }
     function onUp() {
       isDraggingSliderRef.current = false;
       if (sliderTimerRef.current) clearTimeout(sliderTimerRef.current);
       sliderTimerRef.current = setTimeout(() => { if (!isHoveringSliderRef.current) setSliderActive(false); }, 1200);
-      track!.removeEventListener("pointermove", onMove);
-      track!.removeEventListener("pointerup", onUp);
+      target.removeEventListener("pointermove", onMove);
+      target.removeEventListener("pointerup", onUp);
+      target.removeEventListener("pointercancel", onUp);
     }
-    track.addEventListener("pointermove", onMove);
-    track.addEventListener("pointerup", onUp);
-  }, []);
+    target.addEventListener("pointermove", onMove);
+    target.addEventListener("pointerup", onUp);
+    target.addEventListener("pointercancel", onUp);
+  }, [scrollToProgress]);
+
+  // Clicking the track jumps there. Only mouse/trackpad users reach the track (see the slider markup),
+  // so taps near the right edge on phones go to the verses instead.
+  const handleTrackPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const track = trackRef.current;
+    if (!track) return;
+    const toProgress = (clientY: number) => {
+      const rect = track.getBoundingClientRect();
+      return Math.max(0, Math.min((clientY - rect.top) / rect.height, 1));
+    };
+    beginSliderDrag(track, e.pointerId, toProgress);
+    scrollToProgress(toProgress(e.clientY));
+  }, [beginSliderDrag, scrollToProgress]);
+
+  // Dragging the thumb moves the page relative to where it was grabbed, so it never jumps.
+  const handleThumbPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const track = trackRef.current;
+    const thumb = thumbRef.current;
+    if (!track || !thumb) return;
+    const grabOffset = e.clientY - thumb.getBoundingClientRect().top;
+    beginSliderDrag(e.currentTarget, e.pointerId, (clientY) => {
+      const rect = track.getBoundingClientRect();
+      const range = rect.height - thumb.offsetHeight;
+      return range > 0 ? Math.max(0, Math.min((clientY - grabOffset - rect.top) / range, 1)) : 0;
+    });
+  }, [beginSliderDrag]);
 
   // Bismillah header: show for all except Al-Fatiha (verse 1 IS Bismillah) and At-Tawbah (no Bismillah)
   const showBismillahHeader = surahNum !== 1 && surahNum !== 9;
@@ -848,9 +876,11 @@ export default function SurahPage() {
 
       {/* Verse scroll slider */}
       {arabic.numberOfAyahs > 1 && (
+        // The track is only interactive for mouse/trackpad; on touch screens just the thumb is, so taps
+        // on verses near the right edge aren't swallowed.
         <div
           ref={trackRef}
-          className="fixed right-0 z-20"
+          className="fixed right-0 z-20 pointer-events-none [@media(pointer:fine)]:pointer-events-auto"
           style={{ top: BANNER_H, bottom: 0, width: 32, touchAction: "none", cursor: "pointer" }}
           onPointerDown={handleTrackPointerDown}
           onMouseEnter={() => {
@@ -902,7 +932,20 @@ export default function SurahPage() {
                 borderRadius: 99,
                 transition: "background-color 0.2s ease",
               }}
-            />
+            >
+              {/* Finger-sized grab area, live only while the slider is showing (during/just after scrolling) */}
+              <div
+                onPointerDown={handleThumbPointerDown}
+                className="absolute right-0"
+                style={{
+                  top: -12,
+                  bottom: -12,
+                  width: 32,
+                  touchAction: "none",
+                  pointerEvents: sliderActive ? "auto" : "none",
+                }}
+              />
+            </div>
           </div>
         </div>
       )}
