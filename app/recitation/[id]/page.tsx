@@ -237,6 +237,19 @@ export default function RecitationPage() {
     const audio = new Audio(chapterAudioUrlRef.current);
     chapterAudioRef.current = audio;
 
+    // Follow the element's real state: iOS pauses audio on its own when AirPods or other
+    // headphones connect, disconnect or come out of your ears, and the button must match.
+    audio.addEventListener("play", () => {
+      if (chapterAudioRef.current !== audio) return;
+      isPlayingRef.current = true;
+      setIsPlaying(true);
+    });
+    audio.addEventListener("pause", () => {
+      if (chapterAudioRef.current !== audio) return;
+      isPlayingRef.current = false;
+      setIsPlaying(false);
+    });
+
     audio.ontimeupdate = () => {
       const nowMs = audio.currentTime * 1000;
       const curVerse = playingVerseRef.current;

@@ -424,7 +424,12 @@ export default function SurahPage() {
     if (!timing || !chapterAudioUrlRef.current) return;
 
     if (!chapterAudioRef.current) {
-      chapterAudioRef.current = new Audio(chapterAudioUrlRef.current);
+      const el = new Audio(chapterAudioUrlRef.current);
+      // Follow the element's real state: iOS pauses audio on its own when AirPods or other
+      // headphones connect, disconnect or come out of your ears, and the button must match.
+      el.addEventListener("play", () => { if (chapterAudioRef.current === el) setIsPlaying(true); });
+      el.addEventListener("pause", () => { if (chapterAudioRef.current === el) setIsPlaying(false); });
+      chapterAudioRef.current = el;
     }
     const audio = chapterAudioRef.current;
 
@@ -524,6 +529,45 @@ export default function SurahPage() {
     const next = Math.max(1, Math.min(numberOfAyahsRef.current, current + delta));
     playVerse(next, true);
   }, [playVerse]);
+
+  // Lock screen, Control Center and AirPods controls (tap to play/pause, skip to next/previous verse)
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !playerOpen) return;
+    const session = navigator.mediaSession;
+    const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ["play", () => resumePlayback()],
+      ["pause", () => pausePlayback()],
+      ["previoustrack", () => skipVerse(-1)],
+      ["nexttrack", () => skipVerse(1)],
+      ["stop", () => stopPlayback()],
+    ];
+    for (const [action, handler] of handlers) {
+      try { session.setActionHandler(action, handler); } catch { /* unsupported action */ }
+    }
+    return () => {
+      for (const [action] of handlers) {
+        try { session.setActionHandler(action, null); } catch { /* unsupported action */ }
+      }
+    };
+  }, [playerOpen, resumePlayback, pausePlayback, skipVerse, stopPlayback]);
+
+  // What the lock screen / Control Center shows while playing
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    const session = navigator.mediaSession;
+    if (!playerOpen || playingVerse === null || !arabic) {
+      session.metadata = null;
+      session.playbackState = "none";
+      return;
+    }
+    session.metadata = new MediaMetadata({
+      title: `${arabic.englishName} · Verse ${playingVerse}`,
+      artist: RECITERS.find((r) => r.id === reciterId)?.name ?? "",
+      album: "Zikra",
+      artwork: [{ src: "/icon.png", sizes: "1024x1024" }],
+    });
+    session.playbackState = isPlaying ? "playing" : "paused";
+  }, [playerOpen, playingVerse, isPlaying, arabic, reciterId]);
 
   // Scrolls the page to `progress` (0–1) and moves the thumb and verse badge to match.
   const scrollToProgress = useCallback((progress: number) => {
