@@ -60,6 +60,14 @@ body::-webkit-scrollbar {
 .arabic {
   font-family: 'ArabicFont', 'Hafs', 'Noto Nastaliq Urdu', 'Amiri', serif;
   direction: rtl;
+  /* Extra room between Arabic words (added to the font's normal space) */
+  word-spacing: 0.15em;
+}
+
+/* Quran page words are separate inline boxes with no space character between them,
+   so their gap comes from margins instead. Keep roughly in step with .arabic's spacing. */
+.arabic-word {
+  margin-inline: 0.2em;
 }
 
 /* Recitation page word spans */

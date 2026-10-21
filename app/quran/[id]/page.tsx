@@ -1208,7 +1208,7 @@ function ArabicWords({
         const isPlaying = playingWordIdx === wordIdx;
         const isHighlighted = isClicked || isPlaying;
         return (
-          <span key={wordIdx} className="relative inline-block leading-loose mx-0.5">
+          <span key={wordIdx} className="arabic-word relative inline-block leading-loose">
             <button
               onClick={() => onWordClick(verseNum, wordIdx)}
               className={`transition-colors duration-150 cursor-pointer ${
