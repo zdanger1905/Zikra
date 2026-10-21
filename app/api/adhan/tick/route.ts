@@ -11,7 +11,7 @@ async function handler(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const summary = await runAdhanTick();
+  const summary = await runAdhanTick(req.nextUrl.origin);
   return NextResponse.json(summary);
 }
 

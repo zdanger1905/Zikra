@@ -9,9 +9,12 @@ import AuthModal from "@/components/AuthModal";
 import {
   ADHAN_OPTIONS,
   DEFAULT_SETTINGS,
+  isLegacySettings,
   normalizeSettings,
   type AdhanSettings,
+  type AdhanType,
   type PrayerKey,
+  type PrayerSetting,
   type SpeakerSelection,
 } from "@/lib/adhan";
 
@@ -111,8 +114,8 @@ function AdhanPageInner() {
           const loaded = normalizeSettings(snap.data());
           setSettings(loaded);
           if (loaded.location) { setCityInput(loaded.location.city); setCountryInput(loaded.location.country); }
-          // Older versions stored Sonos tokens or a single `speaker` here; rewrite in the current shape.
-          if ("sonos" in snap.data() || "speaker" in snap.data()) saveSettings(u, loaded);
+          // Older versions stored Sonos tokens, a single `speaker` or on/off prayers; rewrite in the current shape.
+          if (isLegacySettings(snap.data())) saveSettings(u, loaded);
         }
       }
     });
@@ -199,6 +202,15 @@ function AdhanPageInner() {
       ? settings.speakers.filter((s) => s.groupId !== g.id)
       : [...settings.speakers, { groupId: g.id, name: g.name, playerIds: g.playerIds }];
     persistSettings({ ...settings, speakers });
+  }
+
+  // Updates one prayer's options. Slider drags update locally and save once on release (commit).
+  function updatePrayer(key: PrayerKey, patch: Partial<PrayerSetting>, commit: boolean) {
+    if (!commit) {
+      setSettings((s) => ({ ...s, prayers: { ...s.prayers, [key]: { ...s.prayers[key], ...patch } } }));
+      return;
+    }
+    persistSettings({ ...settings, prayers: { ...settings.prayers, [key]: { ...settings.prayers[key], ...patch } } });
   }
 
   async function setLocation() {
@@ -396,21 +408,37 @@ function AdhanPageInner() {
 
             {/* ── Prayer Selection ── */}
             <Section title="Prayers">
-              <div className="space-y-3">
-                {PRAYER_LABELS.map(({ key, label }) => (
-                  <div key={key} className="flex items-center justify-between">
-                    <div>
-                      <span className="text-white text-sm font-medium">{label}</span>
-                      {prayerTimes && (
-                        <span className="text-gray-500 text-xs ml-2">{to12h(prayerTimes[capitalize(key) as keyof PrayerTimes])}</span>
-                      )}
+              <div className="divide-y divide-[#3a3a3a]">
+                {PRAYER_LABELS.map(({ key, label }) => {
+                  const prayer = settings.prayers[key];
+                  return (
+                    <div key={key} className="py-3 first:pt-0 last:pb-0">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-white text-sm font-medium">{label}</span>
+                          {prayerTimes && (
+                            <span className="text-gray-500 text-xs ml-2">{to12h(prayerTimes[capitalize(key) as keyof PrayerTimes])}</span>
+                          )}
+                        </div>
+                        <Toggle on={prayer.enabled} onChange={(v) => updatePrayer(key, { enabled: v }, true)} />
+                      </div>
+
+                      {/* Per-prayer options slide open when the prayer is on */}
+                      <div
+                        className={`grid transition-[grid-template-rows,opacity] duration-300 ${
+                          prayer.enabled ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                        }`}
+                      >
+                        <div className="overflow-hidden" inert={!prayer.enabled}>
+                          <PrayerOptions
+                            prayer={prayer}
+                            onChange={(patch, commit) => updatePrayer(key, patch, commit)}
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <Toggle
-                      on={settings.prayers[key]}
-                      onChange={(v) => persistSettings({ ...settings, prayers: { ...settings.prayers, [key]: v } })}
-                    />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </Section>
 
@@ -466,21 +494,14 @@ function AdhanPageInner() {
               </div>
             </Section>
 
-            {/* ── Volume ── */}
-            <Section title="Volume">
-              <div className="flex items-center gap-4">
-                <input
-                  type="range"
-                  min={10}
-                  max={100}
-                  value={settings.volume}
-                  onChange={(e) => setSettings((s) => ({ ...s, volume: Number(e.target.value) }))}
-                  onMouseUp={() => persistSettings(settings)}
-                  onTouchEnd={() => persistSettings(settings)}
-                  className="flex-1 accent-white"
-                />
-                <span className="text-white text-sm w-8 text-right">{settings.volume}</span>
-              </div>
+            {/* ── Test Volume ── */}
+            <Section title="Test Volume">
+              <p className="text-gray-500 text-xs mb-3">Used by the test buttons below. Each prayer has its own volume above.</p>
+              <VolumeSlider
+                value={settings.volume}
+                onChange={(v) => setSettings((s) => ({ ...s, volume: v }))}
+                onCommit={() => persistSettings(settings)}
+              />
             </Section>
 
             {/* ── Test Play ── */}
@@ -492,7 +513,7 @@ function AdhanPageInner() {
                     disabled={!!testingPlay}
                     className="flex-1 py-3 bg-[#5a5a5a] hover:bg-[#666] text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
                   >
-                    {testingPlay === "preview" ? "Playing…" : "▶ Quick test (Allahu Akbar)"}
+                    {testingPlay === "preview" ? "Playing…" : "▶ Short test (Allahu Akbar)"}
                   </button>
                   <button
                     onClick={() => testPlay("full")}
@@ -539,6 +560,70 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div className="bg-[#2e2e2e] border border-[#444] rounded-2xl p-6">
       <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">{title}</h2>
       {children}
+    </div>
+  );
+}
+
+const TYPE_OPTIONS: { value: AdhanType; label: string; description: string }[] = [
+  { value: "full",  label: "Full",  description: "The complete adhan." },
+  { value: "quick", label: "Quick", description: "The two opening Allahu Akbar pairs and the closing La ilaha illallah." },
+];
+
+function PrayerOptions({
+  prayer,
+  onChange,
+}: {
+  prayer: PrayerSetting;
+  onChange: (patch: Partial<PrayerSetting>, commit: boolean) => void;
+}) {
+  const current = TYPE_OPTIONS.find((t) => t.value === prayer.type) ?? TYPE_OPTIONS[0];
+  return (
+    <div className="mt-3 rounded-xl bg-[#262626] border border-[#3a3a3a] p-4 space-y-4">
+      <div>
+        <label className="block text-xs text-gray-500 uppercase tracking-widest mb-2">Type</label>
+        <div className="inline-flex rounded-full bg-[#333] p-1">
+          {TYPE_OPTIONS.map((t) => (
+            <button
+              key={t.value}
+              onClick={() => onChange({ type: t.value }, true)}
+              aria-pressed={prayer.type === t.value}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                prayer.type === t.value ? "bg-white text-[#1a1a1a]" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-gray-500 text-xs mt-2">{current.description}</p>
+      </div>
+      <div>
+        <label className="block text-xs text-gray-500 uppercase tracking-widest mb-2">Volume</label>
+        <VolumeSlider
+          value={prayer.volume}
+          onChange={(v) => onChange({ volume: v }, false)}
+          onCommit={() => onChange({}, true)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function VolumeSlider({ value, onChange, onCommit }: { value: number; onChange: (v: number) => void; onCommit: () => void }) {
+  return (
+    <div className="flex items-center gap-4">
+      <input
+        type="range"
+        min={10}
+        max={100}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        onMouseUp={onCommit}
+        onTouchEnd={onCommit}
+        onKeyUp={onCommit}
+        className="flex-1 accent-white"
+      />
+      <span className="text-white text-sm w-8 text-right">{value}</span>
     </div>
   );
 }

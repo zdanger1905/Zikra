@@ -1,6 +1,6 @@
 import { adminDb } from "@/lib/firebaseAdmin";
 import { refreshAccessToken, playAudioClip } from "@/lib/sonos";
-import { adhanOption, normalizeSettings, PRAYER_KEYS, type AdhanSettings, type PrayerKey } from "@/lib/adhan";
+import { clipUrl, normalizeSettings, PRAYER_KEYS, type AdhanClip, type AdhanSettings, type PrayerKey } from "@/lib/adhan";
 
 // Collections only the server touches (Firestore rules should deny client access).
 export const CONNECTIONS = "sonosConnections";
@@ -53,12 +53,18 @@ export async function getValidToken(uid: string, conn: SonosConnection): Promise
 
 export type PlayResult = { ok: true } | { ok: false; error: string };
 
-// Plays on every selected speaker. `previewOrigin` switches to the short opening clip hosted on that origin.
+export interface PlayRequest {
+  clip: AdhanClip;
+  volume?: number; // defaults to the settings' test volume
+  origin: string;  // where the trimmed clips are hosted
+}
+
+// Plays on every selected speaker.
 export async function playAdhanForUser(
   uid: string,
+  play: PlayRequest,
   conn?: SonosConnection | null,
-  settings?: AdhanSettings,
-  previewOrigin?: string
+  settings?: AdhanSettings
 ): Promise<PlayResult> {
   conn ??= await getConnection(uid);
   if (!conn) return { ok: false, error: "not_connected" };
@@ -69,9 +75,8 @@ export async function playAdhanForUser(
   const token = await getValidToken(uid, conn);
   if (!token) return { ok: false, error: "token_expired" };
 
-  const option = adhanOption(settings.adhanAudio);
-  const url = previewOrigin ? `${previewOrigin}${option.preview}` : option.url;
-  const volume = settings.volume;
+  const url = clipUrl(settings.adhanAudio, play.clip, play.origin);
+  const volume = play.volume ?? settings.volume;
   const results = await Promise.all(playerIds.map((id) => playAudioClip(token, id, url, volume)));
   return results.some(Boolean) ? { ok: true } : { ok: false, error: "play_failed" };
 }
@@ -143,7 +148,8 @@ export interface TickSummary {
 }
 
 // Called every minute by the cron job. Plays the adhan for any user whose prayer time has just arrived.
-export async function runAdhanTick(): Promise<TickSummary> {
+// `origin` is the site's own origin, where the trimmed quick clips are hosted.
+export async function runAdhanTick(origin: string): Promise<TickSummary> {
   const db = adminDb();
   const snaps = await db.collection(CONNECTIONS).get();
   const summary: TickSummary = { checked: snaps.size, played: [], errors: [] };
@@ -161,7 +167,7 @@ export async function runAdhanTick(): Promise<TickSummary> {
 
         const now = localParts(schedule.timezone).minutes;
         const due = PRAYER_KEYS.find((p) => {
-          if (!settings.prayers[p] || schedule.played.includes(p)) return false;
+          if (!settings.prayers[p].enabled || schedule.played.includes(p)) return false;
           const diff = now - toMinutes(schedule.times[p]);
           return diff >= 0 && diff < FIRE_WINDOW_MINUTES;
         });
@@ -177,7 +183,8 @@ export async function runAdhanTick(): Promise<TickSummary> {
         });
         if (!claimed) return;
 
-        const result = await playAdhanForUser(uid, conn, settings);
+        const { type, volume } = settings.prayers[due];
+        const result = await playAdhanForUser(uid, { clip: type, volume, origin }, conn, settings);
         if (result.ok) summary.played.push(`${uid}:${due}`);
         else summary.errors.push(`${uid}:${due}:${result.error}`);
       } catch (e) {
