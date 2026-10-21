@@ -37,7 +37,8 @@ interface SurahEdition {
 }
 
 interface WordEntry {
-  arabic: string;
+  arabic: string;    // quran.com text_uthmani
+  arabicQpc: string; // quran.com text_qpc_hafs, encoded for the KFGQPC Uthmani font
   translation: string;
 }
 
@@ -325,7 +326,7 @@ export default function SurahPage() {
       ),
       loadAsadData(),
       fetch(
-        `https://api.quran.com/api/v4/verses/by_chapter/${id}?words=true&word_fields=text_uthmani,translation_text&per_page=300`
+        `https://api.quran.com/api/v4/verses/by_chapter/${id}?words=true&word_fields=text_uthmani,text_qpc_hafs,translation_text&per_page=300`
       )
         .then((r) => r.json())
         .catch(() => null),
@@ -346,6 +347,7 @@ export default function SurahPage() {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               .map((w: any) => ({
                 arabic: w.text_uthmani ?? "",
+                arabicQpc: w.text_qpc_hafs ?? "",
                 translation: w.translation?.text ?? "",
               }));
           }
@@ -793,6 +795,7 @@ export default function SurahPage() {
                 <ArabicWords
                   text={arabicText}
                   words={wordData?.[ayah.numberInSurah] ?? null}
+                  qpcText={quranFont(font).qpcText}
                   verseNum={ayah.numberInSurah}
                   activeWord={activeWord}
                   playingWordIdx={playingVerse === ayah.numberInSurah ? playingWordIdx : null}
@@ -1239,9 +1242,11 @@ function ArabicWords({
   theme,
   onWordClick,
   onClose,
+  qpcText,
 }: {
   text: string;
   words: WordEntry[] | null;
+  qpcText: boolean;
   verseNum: number;
   activeWord: { verseNum: number; wordIdx: number } | null;
   playingWordIdx: number | null;
@@ -1292,7 +1297,7 @@ function ArabicWords({
                 isHighlighted ? "text-[#6b9fff]" : "hover:text-[#6b9fff]"
               }`}
             >
-              {word.arabic}
+              {(qpcText && word.arabicQpc) || word.arabic}
             </button>
 
             {/* Tooltip bubble — only on click, not on audio highlight */}
