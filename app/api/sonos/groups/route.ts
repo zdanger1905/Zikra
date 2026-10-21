@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getGroups, refreshAccessToken } from "@/lib/sonos";
+import { getRequestUid } from "@/lib/firebaseAdmin";
+import { getGroups } from "@/lib/sonos";
+import { getConnection, getValidToken } from "@/lib/adhanServer";
 
-export async function POST(req: NextRequest) {
-  const { accessToken, refreshToken, tokenExpiry, householdId } = await req.json();
+// Reports whether the user has Sonos connected and, if so, which rooms can play the adhan.
+export async function GET(req: NextRequest) {
+  const uid = await getRequestUid(req);
+  if (!uid) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  if (!accessToken || !householdId) {
-    return NextResponse.json({ error: "missing_params" }, { status: 400 });
+  const conn = await getConnection(uid);
+  if (!conn) return NextResponse.json({ connected: false, groups: [] });
+
+  const token = await getValidToken(uid, conn);
+  if (!token) return NextResponse.json({ connected: false, groups: [], error: "token_expired" });
+
+  try {
+    const groups = await getGroups(token, conn.householdId);
+    return NextResponse.json({ connected: true, groups });
+  } catch {
+    return NextResponse.json({ connected: true, groups: [], error: "sonos_unreachable" });
   }
-
-  let token = accessToken;
-  let newAccessToken: string | null = null;
-
-  if (Date.now() >= tokenExpiry - 5 * 60 * 1000) {
-    const refreshed = await refreshAccessToken(refreshToken);
-    if (refreshed.access_token) {
-      token = refreshed.access_token;
-      newAccessToken = token;
-    }
-  }
-
-  const data = await getGroups(token, householdId);
-  return NextResponse.json({ groups: data.groups ?? [], newAccessToken });
 }

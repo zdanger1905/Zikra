@@ -2,6 +2,35 @@ const SONOS_API = "https://api.ws.sonos.com/control/api/v1";
 const SONOS_AUTH_URL = "https://api.sonos.com/login/v3/oauth";
 const SONOS_TOKEN_URL = "https://api.sonos.com/login/v3/oauth/access";
 
+export interface SonosTokens {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+}
+
+interface SonosPlayer {
+  id: string;
+  name: string;
+  capabilities?: string[];
+}
+
+interface SonosGroupRaw {
+  id: string;
+  name: string;
+  playerIds: string[];
+}
+
+export interface SonosGroup {
+  id: string;
+  name: string;
+  playerIds: string[];
+}
+
+export function sonosRedirectUri(fallbackOrigin: string): string {
+  const base = process.env.NEXT_PUBLIC_BASE_URL ?? fallbackOrigin;
+  return `${base}/api/sonos/callback`;
+}
+
 export function getSonosAuthUrl(redirectUri: string, state: string): string {
   const params = new URLSearchParams({
     client_id: process.env.SONOS_CLIENT_ID!,
@@ -19,58 +48,59 @@ function basicAuth() {
   ).toString("base64");
 }
 
-export async function exchangeCodeForTokens(code: string, redirectUri: string) {
+async function tokenRequest(body: Record<string, string>): Promise<SonosTokens> {
   const res = await fetch(SONOS_TOKEN_URL, {
     method: "POST",
     headers: {
       Authorization: `Basic ${basicAuth()}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: redirectUri,
-    }),
+    body: new URLSearchParams(body),
   });
   return res.json();
 }
 
-export async function refreshAccessToken(refreshToken: string) {
-  const res = await fetch(SONOS_TOKEN_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basicAuth()}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-    }),
-  });
-  return res.json();
+export function exchangeCodeForTokens(code: string, redirectUri: string) {
+  return tokenRequest({ grant_type: "authorization_code", code, redirect_uri: redirectUri });
 }
 
-export async function getHouseholds(accessToken: string) {
+export function refreshAccessToken(refreshToken: string) {
+  return tokenRequest({ grant_type: "refresh_token", refresh_token: refreshToken });
+}
+
+export async function getHouseholds(accessToken: string): Promise<{ id: string }[]> {
   const res = await fetch(`${SONOS_API}/households`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  return res.json();
+  const data = await res.json();
+  return data.households ?? [];
 }
 
-export async function getGroups(accessToken: string, householdId: string) {
+// Returns groups with playerIds narrowed to speakers that can play audio clips.
+export async function getGroups(accessToken: string, householdId: string): Promise<SonosGroup[]> {
   const res = await fetch(`${SONOS_API}/households/${householdId}/groups`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  return res.json();
+  if (!res.ok) throw new Error(`sonos_groups_${res.status}`);
+  const data: { groups?: SonosGroupRaw[]; players?: SonosPlayer[] } = await res.json();
+
+  const clipCapable = new Set(
+    (data.players ?? []).filter((p) => p.capabilities?.includes("AUDIO_CLIP")).map((p) => p.id)
+  );
+
+  return (data.groups ?? [])
+    .map((g) => ({ id: g.id, name: g.name, playerIds: g.playerIds.filter((id) => clipCapable.has(id)) }))
+    .filter((g) => g.playerIds.length > 0);
 }
 
+// Audio clips are played per player, not per group.
 export async function playAudioClip(
   accessToken: string,
-  groupId: string,
+  playerId: string,
   streamUrl: string,
   volume: number
-) {
-  const res = await fetch(`${SONOS_API}/groups/${groupId}/audioClip`, {
+): Promise<boolean> {
+  const res = await fetch(`${SONOS_API}/players/${playerId}/audioClip`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -78,11 +108,12 @@ export async function playAudioClip(
     },
     body: JSON.stringify({
       name: "Adhan",
-      appId: "com.zikra.adhan",
+      appId: "io.zikra.adhan",
       streamUrl,
       volume,
       clipType: "CUSTOM",
+      priority: "HIGH",
     }),
   });
-  return res.json();
+  return res.ok;
 }

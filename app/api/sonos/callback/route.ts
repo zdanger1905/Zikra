@@ -1,37 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
-import { exchangeCodeForTokens, getHouseholds } from "@/lib/sonos";
+import { adminDb } from "@/lib/firebaseAdmin";
+import { exchangeCodeForTokens, getHouseholds, sonosRedirectUri } from "@/lib/sonos";
+import { CONNECTIONS, OAUTH_STATES } from "@/lib/adhanServer";
+
+const STATE_TTL_MS = 15 * 60 * 1000;
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
+  const state = req.nextUrl.searchParams.get("state");
   const error = req.nextUrl.searchParams.get("error");
+  const back = (query: string) => NextResponse.redirect(new URL(`/adhan?${query}`, req.url));
 
-  if (error || !code) {
-    return NextResponse.redirect(new URL("/adhan?error=denied", req.url));
-  }
-
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? `${req.nextUrl.protocol}//${req.nextUrl.host}`;
-  const redirectUri = `${base}/api/sonos/callback`;
+  if (error || !code || !state) return back("error=denied");
 
   try {
-    const tokens = await exchangeCodeForTokens(code, redirectUri);
-    if (!tokens.access_token) {
-      return NextResponse.redirect(new URL("/adhan?error=token_failed", req.url));
-    }
+    const db = adminDb();
+    const stateRef = db.collection(OAUTH_STATES).doc(state);
+    const stateSnap = await stateRef.get();
+    if (!stateSnap.exists) return back("error=invalid_state");
+    await stateRef.delete();
 
-    const { access_token, refresh_token, expires_in } = tokens;
-    const householdsData = await getHouseholds(access_token);
-    const householdId = householdsData.households?.[0]?.id ?? "";
+    const { uid, createdAt } = stateSnap.data() as { uid: string; createdAt: number };
+    if (Date.now() - createdAt > STATE_TTL_MS) return back("error=invalid_state");
 
-    const session = JSON.stringify({ access_token, refresh_token, expires_in, householdId });
-    const response = NextResponse.redirect(new URL("/adhan?connected=1", req.url));
-    response.cookies.set("sonos_session", session, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 120,
-      path: "/",
+    const tokens = await exchangeCodeForTokens(code, sonosRedirectUri(req.nextUrl.origin));
+    if (!tokens.access_token || !tokens.refresh_token) return back("error=token_failed");
+
+    const households = await getHouseholds(tokens.access_token);
+    if (!households.length) return back("error=no_household");
+
+    await db.collection(CONNECTIONS).doc(uid).set({
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      tokenExpiry: Date.now() + (tokens.expires_in ?? 86400) * 1000,
+      householdId: households[0].id,
     });
-    return response;
+
+    return back("connected=1");
   } catch {
-    return NextResponse.redirect(new URL("/adhan?error=auth_failed", req.url));
+    return back("error=auth_failed");
   }
 }

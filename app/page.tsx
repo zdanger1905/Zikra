@@ -1,6 +1,5 @@
 import Link from "next/link";
 import HomePrayerTimes from "@/components/HomePrayerTimes";
-import { AdhanFeatureCard, AdhanFooterLink } from "@/components/AdhanComingSoon";
 
 interface AyahEdition {
   text: string;
@@ -59,7 +58,7 @@ export default async function HomePage() {
           <FeatureCard href="/quran" title="The Holy Quran" description="Browse all 114 surahs with Arabic text and translation." icon={<QuranIcon />} />
           <FeatureCard href="/prayer-times" title="Prayer Times" description="Accurate daily prayer times based on your location." icon={<MoonIcon />} />
           <FeatureCard href="/recitation" title="Recitation" description="Arabic-only reader with audio, word highlighting, and loop practice." icon={<RecitationIcon />} />
-          <AdhanFeatureCard icon={<AdhanIcon />} />
+          <FeatureCard href="/adhan" title="Adhan" description="Automatically play the adhan on your Sonos at every prayer time." icon={<AdhanIcon />} />
         </div>
       </section>
 
@@ -94,7 +93,7 @@ export default async function HomePage() {
             </div>
             <div className="flex flex-col gap-3">
               <Link href="/recitation" className="text-gray-400 hover:text-white transition-colors underline">Recitation</Link>
-              <AdhanFooterLink />
+              <Link href="/adhan" className="text-gray-400 hover:text-white transition-colors underline">Adhan</Link>
             </div>
           </div>
         </div>

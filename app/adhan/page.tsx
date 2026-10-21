@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useState, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import AuthModal from "@/components/AuthModal";
+import {
+  ADHAN_OPTIONS,
+  DEFAULT_SETTINGS,
+  normalizeSettings,
+  type AdhanSettings,
+  type PrayerKey,
+} from "@/lib/adhan";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -13,31 +20,6 @@ interface SonosGroup {
   id: string;
   name: string;
   playerIds: string[];
-}
-
-interface SonosConnection {
-  accessToken: string;
-  refreshToken: string;
-  tokenExpiry: number;
-  householdId: string;
-  groupId: string;
-  groupName: string;
-}
-
-interface PrayerToggles {
-  fajr: boolean;
-  dhuhr: boolean;
-  asr: boolean;
-  maghrib: boolean;
-  isha: boolean;
-}
-
-interface AdhanSettings {
-  sonos: SonosConnection | null;
-  prayers: PrayerToggles;
-  adhanAudio: string;
-  volume: number;
-  location: { city: string; country: string } | null;
 }
 
 interface PrayerTimes {
@@ -50,28 +32,23 @@ interface PrayerTimes {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ADHAN_OPTIONS = [
-  { id: "makkah",  label: "Makkah",           url: "https://www.islamcan.com/audio/adhan/azan1.mp3" },
-  { id: "madinah", label: "Madinah",           url: "https://www.islamcan.com/audio/adhan/azan2.mp3" },
-  { id: "egypt",   label: "Egyptian (Classic)", url: "https://www.islamcan.com/audio/adhan/azan3.mp3" },
-  { id: "turkey",  label: "Turkish",            url: "https://www.islamcan.com/audio/adhan/azan4.mp3" },
-];
-
-const DEFAULT_SETTINGS: AdhanSettings = {
-  sonos: null,
-  prayers: { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true },
-  adhanAudio: "makkah",
-  volume: 40,
-  location: null,
-};
-
-const PRAYER_LABELS: { key: keyof PrayerToggles; label: string }[] = [
+const PRAYER_LABELS: { key: PrayerKey; label: string }[] = [
   { key: "fajr",    label: "Fajr" },
   { key: "dhuhr",   label: "Dhuhr" },
   { key: "asr",     label: "Asr" },
   { key: "maghrib", label: "Maghrib" },
   { key: "isha",    label: "Isha" },
 ];
+
+const ERROR_MESSAGES: Record<string, string> = {
+  denied: "Sonos access was not granted.",
+  invalid_state: "That Sonos sign-in link expired. Please try again.",
+  no_household: "No Sonos system was found on that account.",
+  not_connected: "Connect your Sonos first.",
+  no_speaker: "Select a speaker first.",
+  token_expired: "Your Sonos connection expired. Please reconnect.",
+  play_failed: "Could not play. Check your Sonos is online.",
+};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -83,12 +60,20 @@ export default function AdhanPage() {
   );
 }
 
+async function authFetch(user: User, url: string, method = "GET") {
+  const token = await user.getIdToken();
+  const res = await fetch(url, { method, headers: { Authorization: `Bearer ${token}` } });
+  return res.json();
+}
+
 function AdhanPageInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [settings, setSettings] = useState<AdhanSettings>(DEFAULT_SETTINGS);
   const [saving, setSaving] = useState(false);
+  const [connected, setConnected] = useState(false);
   const [groups, setGroups] = useState<SonosGroup[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimes | null>(null);
@@ -112,74 +97,44 @@ function AdhanPageInner() {
       if (u) {
         const snap = await getDoc(doc(db, "users", u.uid, "adhan", "settings"));
         if (snap.exists()) {
-          setSettings(snap.data() as AdhanSettings);
-          const loc = (snap.data() as AdhanSettings).location;
-          if (loc) { setCityInput(loc.city); setCountryInput(loc.country); }
+          const loaded = normalizeSettings(snap.data());
+          setSettings(loaded);
+          if (loaded.location) { setCityInput(loaded.location.city); setCountryInput(loaded.location.country); }
+          // Older versions stored Sonos tokens here; rewrite the doc without them.
+          if ("sonos" in snap.data()) saveSettings(u, loaded);
         }
       }
     });
   }, []);
 
-  // Consume the Sonos OAuth session cookie after redirect
-  useEffect(() => {
-    if (!searchParams.get("connected") || !user) return;
-    setConnectingState(true);
-    fetch("/api/sonos/session")
-      .then((r) => r.json())
-      .then(async (session) => {
-        if (!session?.access_token) { showToast("Connection failed.", false); return; }
-        const updatedSettings: AdhanSettings = {
-          ...settings,
-          sonos: {
-            accessToken: session.access_token,
-            refreshToken: session.refresh_token,
-            tokenExpiry: Date.now() + session.expires_in * 1000,
-            householdId: session.householdId,
-            groupId: "",
-            groupName: "",
-          },
-        };
-        setSettings(updatedSettings);
-        await saveSettings(user, updatedSettings);
-        showToast("Sonos connected!");
-      })
-      .catch(() => showToast("Connection failed.", false))
-      .finally(() => setConnectingState(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  // Show error param
+  // Result of the Sonos OAuth redirect
   useEffect(() => {
     const err = searchParams.get("error");
-    if (err) showToast("Could not connect to Sonos. Please try again.", false);
-  }, [searchParams]);
-
-  // Fetch groups when connected
-  useEffect(() => {
-    if (!settings.sonos?.accessToken || !settings.sonos.householdId) return;
-    setLoadingGroups(true);
-    fetch("/api/sonos/groups", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        accessToken: settings.sonos.accessToken,
-        refreshToken: settings.sonos.refreshToken,
-        tokenExpiry: settings.sonos.tokenExpiry,
-        householdId: settings.sonos.householdId,
-      }),
-    })
-      .then((r) => r.json())
-      .then(({ groups: g, newAccessToken }) => {
-        setGroups(g ?? []);
-        if (newAccessToken && user) {
-          const updated = { ...settings, sonos: { ...settings.sonos!, accessToken: newAccessToken } };
-          setSettings(updated);
-          saveSettings(user, updated);
-        }
-      })
-      .finally(() => setLoadingGroups(false));
+    if (searchParams.get("connected")) showToast("Sonos connected! Now pick a speaker.");
+    else if (err) showToast(ERROR_MESSAGES[err] ?? "Could not connect to Sonos. Please try again.", false);
+    if (err || searchParams.get("connected")) router.replace("/adhan");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.sonos?.accessToken]);
+  }, []);
+
+  const loadGroups = useCallback(async (u: User) => {
+    setLoadingGroups(true);
+    try {
+      const d = await authFetch(u, "/api/sonos/groups");
+      setConnected(!!d.connected);
+      setGroups(d.groups ?? []);
+      if (d.error === "token_expired") showToast(ERROR_MESSAGES.token_expired, false);
+    } catch {
+      setConnected(false);
+    } finally {
+      setLoadingGroups(false);
+    }
+  }, []);
+
+  // Connection status and speakers
+  useEffect(() => {
+    if (user) loadGroups(user);
+    else { setConnected(false); setGroups([]); }
+  }, [user, loadGroups]);
 
   // Fetch prayer times when location set
   useEffect(() => {
@@ -189,6 +144,7 @@ function AdhanPageInner() {
       .then((r) => r.json())
       .then((d) => {
         if (d.data?.timings) setPrayerTimes(d.data.timings as PrayerTimes);
+        else showToast("Couldn't find prayer times for that location.", false);
       })
       .catch(() => {});
   }, [settings.location]);
@@ -204,25 +160,25 @@ function AdhanPageInner() {
     await saveSettings(user, updated).finally(() => setSaving(false));
   }
 
-  function startSonosConnect() {
-    const base = window.location.origin;
-    const redirectUri = `${base}/api/sonos/callback`;
-    const state = Math.random().toString(36).slice(2);
-    const clientId = process.env.NEXT_PUBLIC_SONOS_CLIENT_ID;
-    if (!clientId) { showToast("Sonos integration not configured.", false); return; }
-    const params = new URLSearchParams({
-      client_id: clientId,
-      response_type: "code",
-      redirect_uri: redirectUri,
-      scope: "playback-control-all",
-      state,
-    });
-    window.location.href = `https://api.sonos.com/login/v3/oauth?${params}`;
+  async function startSonosConnect() {
+    if (!user) return;
+    setConnectingState(true);
+    try {
+      const d = await authFetch(user, "/api/sonos/connect", "POST");
+      if (!d.url) throw new Error();
+      window.location.href = d.url;
+    } catch {
+      showToast("Sonos integration not available right now.", false);
+      setConnectingState(false);
+    }
   }
 
-  function disconnectSonos() {
-    persistSettings({ ...settings, sonos: null });
+  async function disconnectSonos() {
+    if (!user) return;
+    await authFetch(user, "/api/sonos/disconnect", "POST").catch(() => {});
+    setConnected(false);
     setGroups([]);
+    persistSettings({ ...settings, speaker: null });
   }
 
   async function setLocation() {
@@ -230,32 +186,21 @@ function AdhanPageInner() {
     await persistSettings({ ...settings, location: { city: cityInput.trim(), country: countryInput.trim() } });
   }
 
-  const testPlay = useCallback(async () => {
-    if (!settings.sonos?.groupId) { showToast("Select a speaker first.", false); return; }
-    const audioOpt = ADHAN_OPTIONS.find((a) => a.id === settings.adhanAudio) ?? ADHAN_OPTIONS[0];
+  async function testPlay() {
+    if (!user) return;
     setTestingPlay(true);
-    fetch("/api/sonos/play", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        accessToken: settings.sonos.accessToken,
-        refreshToken: settings.sonos.refreshToken,
-        tokenExpiry: settings.sonos.tokenExpiry,
-        groupId: settings.sonos.groupId,
-        streamUrl: audioOpt.url,
-        volume: settings.volume,
-      }),
-    })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.id) showToast("Adhan playing on your Sonos!");
-        else showToast("Could not play. Check your Sonos is online.", false);
-      })
-      .catch(() => showToast("Playback error.", false))
-      .finally(() => setTestingPlay(false));
-  }, [settings]);
+    try {
+      const d = await authFetch(user, "/api/adhan/test", "POST");
+      if (d.ok) showToast("Adhan playing on your Sonos!");
+      else showToast(ERROR_MESSAGES[d.error] ?? "Playback error.", false);
+    } catch {
+      showToast("Playback error.", false);
+    } finally {
+      setTestingPlay(false);
+    }
+  }
 
-  const connected = !!settings.sonos?.accessToken;
+  const ready = connected && !!settings.speaker && !!settings.location;
 
   return (
     <div className="min-h-screen bg-[#3d3d3d] pt-8">
@@ -296,7 +241,9 @@ function AdhanPageInner() {
 
             {/* ── Sonos Connection ── */}
             <Section title="Sonos Speaker">
-              {!connected ? (
+              {loadingGroups && !connected ? (
+                <p className="text-gray-500 text-sm">Checking connection…</p>
+              ) : !connected ? (
                 <div className="text-center py-4">
                   <p className="text-gray-400 text-sm mb-5">Connect your Sonos account to enable automatic adhan playback.</p>
                   <button
@@ -325,19 +272,27 @@ function AdhanPageInner() {
 
                   {/* Group / speaker selector */}
                   <div>
-                    <label className="block text-xs text-gray-500 mb-2 uppercase tracking-widest">Speaker / Room</label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs text-gray-500 uppercase tracking-widest">Speaker / Room</label>
+                      <button
+                        onClick={() => loadGroups(user)}
+                        className="text-xs text-gray-500 hover:text-white transition-colors"
+                      >
+                        Refresh
+                      </button>
+                    </div>
                     {loadingGroups ? (
                       <p className="text-gray-500 text-sm">Loading speakers…</p>
                     ) : groups.length === 0 ? (
-                      <p className="text-gray-500 text-sm">No speakers found. Make sure your Sonos is online.</p>
+                      <p className="text-gray-500 text-sm">No compatible speakers found. Make sure your Sonos is online.</p>
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {groups.map((g) => (
                           <button
                             key={g.id}
-                            onClick={() => persistSettings({ ...settings, sonos: { ...settings.sonos!, groupId: g.id, groupName: g.name } })}
+                            onClick={() => persistSettings({ ...settings, speaker: { groupId: g.id, name: g.name, playerIds: g.playerIds } })}
                             className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
-                              settings.sonos?.groupId === g.id
+                              settings.speaker?.groupId === g.id
                                 ? "bg-white text-[#1a1a1a] border-white"
                                 : "bg-transparent text-gray-300 border-[#555] hover:border-gray-300"
                             }`}
@@ -346,6 +301,10 @@ function AdhanPageInner() {
                           </button>
                         ))}
                       </div>
+                    )}
+                    {/* Group ids change when rooms are regrouped; the saved speakers still work. */}
+                    {settings.speaker && groups.length > 0 && !groups.some((g) => g.id === settings.speaker!.groupId) && (
+                      <p className="text-gray-500 text-xs mt-2">Currently playing on: {settings.speaker.name}</p>
                     )}
                   </div>
                 </div>
@@ -406,9 +365,12 @@ function AdhanPageInner() {
             <Section title="Adhan">
               <div className="space-y-2">
                 {ADHAN_OPTIONS.map((opt) => (
-                  <label key={opt.id} className="flex items-center gap-3 cursor-pointer group">
+                  <label
+                    key={opt.id}
+                    onClick={() => persistSettings({ ...settings, adhanAudio: opt.id })}
+                    className="flex items-center gap-3 cursor-pointer group"
+                  >
                     <span
-                      onClick={() => persistSettings({ ...settings, adhanAudio: opt.id })}
                       className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors ${
                         settings.adhanAudio === opt.id
                           ? "bg-[#6b9fff] border-[#666]"
@@ -439,17 +401,23 @@ function AdhanPageInner() {
             </Section>
 
             {/* ── Test Play ── */}
-            {connected && settings.sonos?.groupId && (
+            {connected && settings.speaker && (
               <button
                 onClick={testPlay}
                 disabled={testingPlay}
                 className="w-full py-3 bg-[#5a5a5a] hover:bg-[#666] text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
               >
-                {testingPlay ? "Playing…" : "▶ Test Adhan on " + (settings.sonos.groupName || "Speaker")}
+                {testingPlay ? "Playing…" : "▶ Test Adhan on " + settings.speaker.name}
               </button>
             )}
 
             {saving && <p className="text-center text-xs text-gray-600">Saving…</p>}
+
+            {ready && (
+              <p className="text-center text-xs text-green-400">
+                ✓ All set. The adhan will play on {settings.speaker!.name} at each selected prayer time.
+              </p>
+            )}
 
             {/* ── How it works ── */}
             <div className="bg-[#2a2a2a] border border-[#3a3a3a] rounded-2xl p-6 mt-4">
@@ -458,67 +426,15 @@ function AdhanPageInner() {
                 <li>Connect your Sonos account and select a speaker.</li>
                 <li>Choose which prayers you want the adhan to play for.</li>
                 <li>Set your city so we can calculate the correct prayer times.</li>
-                <li>At each prayer time, the adhan will play on your Sonos automatically.</li>
+                <li>At each prayer time, the adhan will play on your Sonos automatically. You don&apos;t need to keep this page open.</li>
               </ol>
-              <p className="text-gray-600 text-xs mt-4">
-                Automatic scheduling requires the Zikra tab to remain open in your browser.
-                A background scheduling service is coming soon.
-              </p>
             </div>
 
           </div>
         )}
       </div>
-
-      {/* Background scheduler (runs while page is open) */}
-      {user && connected && <AdhanScheduler settings={settings} onPlay={testPlay} />}
     </div>
   );
-}
-
-// ─── Background Scheduler ─────────────────────────────────────────────────────
-
-function AdhanScheduler({ settings, onPlay }: { settings: AdhanSettings; onPlay: () => void }) {
-  useEffect(() => {
-    if (!settings.location) return;
-
-    let lastFired = "";
-
-    const interval = setInterval(async () => {
-      const now = new Date();
-      const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-      const key = hhmm;
-      if (lastFired === key) return;
-
-      const loc = settings.location!;
-      const res = await fetch(
-        `https://api.aladhan.com/v1/timingsByCity?city=${encodeURIComponent(loc.city)}&country=${encodeURIComponent(loc.country)}&method=2`
-      ).then((r) => r.json()).catch(() => null);
-
-      if (!res?.data?.timings) return;
-      const timings: Record<string, string> = res.data.timings;
-
-      const prayerMap: Record<keyof PrayerToggles, string> = {
-        fajr: rawTime(timings.Fajr),
-        dhuhr: rawTime(timings.Dhuhr),
-        asr: rawTime(timings.Asr),
-        maghrib: rawTime(timings.Maghrib),
-        isha: rawTime(timings.Isha),
-      };
-
-      for (const [prayer, time] of Object.entries(prayerMap)) {
-        if (time === hhmm && settings.prayers[prayer as keyof PrayerToggles]) {
-          lastFired = key;
-          onPlay();
-          break;
-        }
-      }
-    }, 30_000);
-
-    return () => clearInterval(interval);
-  }, [settings, onPlay]);
-
-  return null;
 }
 
 // ─── UI Primitives ────────────────────────────────────────────────────────────
