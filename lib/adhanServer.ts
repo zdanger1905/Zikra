@@ -1,6 +1,6 @@
 import { adminDb } from "@/lib/firebaseAdmin";
 import { refreshAccessToken, playAudioClip } from "@/lib/sonos";
-import { adhanUrl, normalizeSettings, PRAYER_KEYS, type AdhanSettings, type PrayerKey } from "@/lib/adhan";
+import { adhanOption, normalizeSettings, PRAYER_KEYS, type AdhanSettings, type PrayerKey } from "@/lib/adhan";
 
 // Collections only the server touches (Firestore rules should deny client access).
 export const CONNECTIONS = "sonosConnections";
@@ -53,23 +53,26 @@ export async function getValidToken(uid: string, conn: SonosConnection): Promise
 
 export type PlayResult = { ok: true } | { ok: false; error: string };
 
+// Plays on every selected speaker. `previewOrigin` switches to the short opening clip hosted on that origin.
 export async function playAdhanForUser(
   uid: string,
   conn?: SonosConnection | null,
-  settings?: AdhanSettings
+  settings?: AdhanSettings,
+  previewOrigin?: string
 ): Promise<PlayResult> {
   conn ??= await getConnection(uid);
   if (!conn) return { ok: false, error: "not_connected" };
   settings ??= await getSettings(uid);
-  if (!settings.speaker?.playerIds.length) return { ok: false, error: "no_speaker" };
+  const playerIds = [...new Set(settings.speakers.flatMap((s) => s.playerIds))];
+  if (!playerIds.length) return { ok: false, error: "no_speaker" };
 
   const token = await getValidToken(uid, conn);
   if (!token) return { ok: false, error: "token_expired" };
 
-  const url = adhanUrl(settings.adhanAudio);
-  const results = await Promise.all(
-    settings.speaker.playerIds.map((id) => playAudioClip(token, id, url, settings.volume))
-  );
+  const option = adhanOption(settings.adhanAudio);
+  const url = previewOrigin ? `${previewOrigin}${option.preview}` : option.url;
+  const volume = settings.volume;
+  const results = await Promise.all(playerIds.map((id) => playAudioClip(token, id, url, volume)));
   return results.some(Boolean) ? { ok: true } : { ok: false, error: "play_failed" };
 }
 
@@ -151,7 +154,7 @@ export async function runAdhanTick(): Promise<TickSummary> {
       try {
         const conn = snap.data() as SonosConnection;
         const settings = await getSettings(uid);
-        if (!settings.location || !settings.speaker) return;
+        if (!settings.location || !settings.speakers.length) return;
 
         const schedule = await scheduleForToday(conn.schedule, settings.location);
         if (schedule !== conn.schedule) await snap.ref.update({ schedule });

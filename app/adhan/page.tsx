@@ -12,6 +12,7 @@ import {
   normalizeSettings,
   type AdhanSettings,
   type PrayerKey,
+  type SpeakerSelection,
 } from "@/lib/adhan";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -61,10 +62,18 @@ export default function AdhanPage() {
   );
 }
 
-async function authFetch(user: User, url: string, method = "GET") {
+async function authFetch(user: User, url: string, method = "GET", body?: object) {
   const token = await user.getIdToken();
-  const res = await fetch(url, { method, headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(url, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, ...(body && { "Content-Type": "application/json" }) },
+    body: body && JSON.stringify(body),
+  });
   return res.json();
+}
+
+function speakerNames(speakers: SpeakerSelection[]) {
+  return speakers.map((s) => s.name).join(", ");
 }
 
 function AdhanPageInner() {
@@ -80,7 +89,7 @@ function AdhanPageInner() {
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimes | null>(null);
   const [cityInput, setCityInput] = useState("");
   const [countryInput, setCountryInput] = useState("");
-  const [testingPlay, setTestingPlay] = useState(false);
+  const [testingPlay, setTestingPlay] = useState<"preview" | "full" | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [connectingState, setConnectingState] = useState(false);
   const [wrongAccount, setWrongAccount] = useState(false);
@@ -102,8 +111,8 @@ function AdhanPageInner() {
           const loaded = normalizeSettings(snap.data());
           setSettings(loaded);
           if (loaded.location) { setCityInput(loaded.location.city); setCountryInput(loaded.location.country); }
-          // Older versions stored Sonos tokens here; rewrite the doc without them.
-          if ("sonos" in snap.data()) saveSettings(u, loaded);
+          // Older versions stored Sonos tokens or a single `speaker` here; rewrite in the current shape.
+          if ("sonos" in snap.data() || "speaker" in snap.data()) saveSettings(u, loaded);
         }
       }
     });
@@ -181,7 +190,15 @@ function AdhanPageInner() {
     await authFetch(user, "/api/sonos/disconnect", "POST").catch(() => {});
     setConnected(false);
     setGroups([]);
-    persistSettings({ ...settings, speaker: null });
+    persistSettings({ ...settings, speakers: [] });
+  }
+
+  function toggleSpeaker(g: SonosGroup) {
+    const selected = settings.speakers.some((s) => s.groupId === g.id);
+    const speakers = selected
+      ? settings.speakers.filter((s) => s.groupId !== g.id)
+      : [...settings.speakers, { groupId: g.id, name: g.name, playerIds: g.playerIds }];
+    persistSettings({ ...settings, speakers });
   }
 
   async function setLocation() {
@@ -189,21 +206,23 @@ function AdhanPageInner() {
     await persistSettings({ ...settings, location: { city: cityInput.trim(), country: countryInput.trim() } });
   }
 
-  async function testPlay() {
+  async function testPlay(mode: "preview" | "full") {
     if (!user) return;
-    setTestingPlay(true);
+    setTestingPlay(mode);
     try {
-      const d = await authFetch(user, "/api/adhan/test", "POST");
-      if (d.ok) showToast("Adhan playing on your Sonos!");
+      const d = await authFetch(user, "/api/adhan/test", "POST", { preview: mode === "preview" });
+      if (d.ok) showToast(mode === "preview" ? "Playing the opening on your Sonos!" : "Adhan playing on your Sonos!");
       else showToast(ERROR_MESSAGES[d.error] ?? "Playback error.", false);
     } catch {
       showToast("Playback error.", false);
     } finally {
-      setTestingPlay(false);
+      setTestingPlay(null);
     }
   }
 
-  const ready = connected && !!settings.speaker && !!settings.location;
+  const ready = connected && settings.speakers.length > 0 && !!settings.location;
+  // Group ids change when rooms are regrouped; saved selections keep their player ids and still play.
+  const unlistedSpeakers = settings.speakers.filter((s) => !groups.some((g) => g.id === s.groupId));
 
   return (
     <div className="min-h-screen bg-[#3d3d3d] pt-8">
@@ -317,7 +336,7 @@ function AdhanPageInner() {
                   {/* Group / speaker selector */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <label className="block text-xs text-gray-500 uppercase tracking-widest">Speaker / Room</label>
+                      <label className="block text-xs text-gray-500 uppercase tracking-widest">Speakers / Rooms</label>
                       <button
                         onClick={() => loadGroups(user)}
                         className="text-xs text-gray-500 hover:text-white transition-colors"
@@ -330,25 +349,45 @@ function AdhanPageInner() {
                     ) : groups.length === 0 ? (
                       <p className="text-gray-500 text-sm">No compatible speakers found. Make sure your Sonos is online.</p>
                     ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {groups.map((g) => (
-                          <button
-                            key={g.id}
-                            onClick={() => persistSettings({ ...settings, speaker: { groupId: g.id, name: g.name, playerIds: g.playerIds } })}
-                            className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
-                              settings.speaker?.groupId === g.id
-                                ? "bg-white text-[#1a1a1a] border-white"
-                                : "bg-transparent text-gray-300 border-[#555] hover:border-gray-300"
-                            }`}
-                          >
-                            {g.name}
-                          </button>
-                        ))}
-                      </div>
+                      <>
+                        <p className="text-gray-500 text-xs mb-3">Tap to select as many as you like. Tap again to remove.</p>
+                        <div className="flex flex-wrap gap-2">
+                          {groups.map((g) => {
+                            const selected = settings.speakers.some((s) => s.groupId === g.id);
+                            return (
+                              <button
+                                key={g.id}
+                                onClick={() => toggleSpeaker(g)}
+                                aria-pressed={selected}
+                                className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                                  selected
+                                    ? "bg-white text-[#1a1a1a] border-white"
+                                    : "bg-transparent text-gray-300 border-[#555] hover:border-gray-300"
+                                }`}
+                              >
+                                {selected && "✓ "}{g.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
                     )}
-                    {/* Group ids change when rooms are regrouped; the saved speakers still work. */}
-                    {settings.speaker && groups.length > 0 && !groups.some((g) => g.id === settings.speaker!.groupId) && (
-                      <p className="text-gray-500 text-xs mt-2">Currently playing on: {settings.speaker.name}</p>
+                    {!loadingGroups && groups.length > 0 && unlistedSpeakers.length > 0 && (
+                      <p className="text-gray-500 text-xs mt-3">
+                        Also selected (rooms were regrouped):{" "}
+                        {unlistedSpeakers.map((s, i) => (
+                          <span key={s.groupId}>
+                            {i > 0 && ", "}
+                            {s.name}{" "}
+                            <button
+                              onClick={() => persistSettings({ ...settings, speakers: settings.speakers.filter((x) => x.groupId !== s.groupId) })}
+                              className="underline hover:text-red-400"
+                            >
+                              remove
+                            </button>
+                          </span>
+                        ))}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -445,21 +484,33 @@ function AdhanPageInner() {
             </Section>
 
             {/* ── Test Play ── */}
-            {connected && settings.speaker && (
-              <button
-                onClick={testPlay}
-                disabled={testingPlay}
-                className="w-full py-3 bg-[#5a5a5a] hover:bg-[#666] text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
-              >
-                {testingPlay ? "Playing…" : "▶ Test Adhan on " + settings.speaker.name}
-              </button>
+            {connected && settings.speakers.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => testPlay("preview")}
+                    disabled={!!testingPlay}
+                    className="flex-1 py-3 bg-[#5a5a5a] hover:bg-[#666] text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    {testingPlay === "preview" ? "Playing…" : "▶ Quick test (Allahu Akbar)"}
+                  </button>
+                  <button
+                    onClick={() => testPlay("full")}
+                    disabled={!!testingPlay}
+                    className="flex-1 py-3 bg-[#4a4a4a] hover:bg-[#5a5a5a] text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    {testingPlay === "full" ? "Playing…" : "▶ Play full adhan"}
+                  </button>
+                </div>
+                <p className="text-center text-xs text-gray-500">Plays on {speakerNames(settings.speakers)}</p>
+              </div>
             )}
 
             {saving && <p className="text-center text-xs text-gray-600">Saving…</p>}
 
             {ready && (
               <p className="text-center text-xs text-green-400">
-                ✓ All set. The adhan will play on {settings.speaker!.name} at each selected prayer time.
+                ✓ All set. The adhan will play on {speakerNames(settings.speakers)} at each selected prayer time.
               </p>
             )}
 
@@ -467,7 +518,7 @@ function AdhanPageInner() {
             <div className="bg-[#2a2a2a] border border-[#3a3a3a] rounded-2xl p-6 mt-4">
               <h3 className="text-white text-sm font-semibold mb-3">How it works</h3>
               <ol className="space-y-2 text-gray-400 text-sm list-decimal list-inside leading-relaxed">
-                <li>Connect your Sonos account and select a speaker.</li>
+                <li>Connect your Sonos account and select one or more speakers.</li>
                 <li>Choose which prayers you want the adhan to play for.</li>
                 <li>Set your city so we can calculate the correct prayer times.</li>
                 <li>At each prayer time, the adhan will play on your Sonos automatically. You don&apos;t need to keep this page open.</li>
