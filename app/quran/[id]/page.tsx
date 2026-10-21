@@ -16,6 +16,7 @@ import { auth } from "@/lib/firebase";
 import { saveVerse, unsaveVerse, getSavedVerseKeys, fuzzyMatch } from "@/lib/history";
 import AuthModal from "@/components/AuthModal";
 import { useKeepInViewport } from "@/lib/useKeepInViewport";
+import { normalizeSegments, wordWeight } from "@/lib/audioSegments";
 import { QURAN_FONTS, RECITERS, loadFont, loadReciter, quranFont, type QuranFontId } from "@/lib/quranSettings";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -82,7 +83,8 @@ export default function SurahPage() {
     return () => { document.body.style.overflow = ""; };
   }, [activeFootnote]);
   const [wordData, setWordData] = useState<Record<number, WordEntry[]> | null>(null);
-  const [audioData, setAudioData] = useState<Record<string, VerseAudio> | null>(null);
+  const [rawAudioData, setRawAudioData] = useState<Record<string, VerseAudio> | null>(null); // as fetched
+  const [audioData, setAudioData] = useState<Record<string, VerseAudio> | null>(null);       // word timings cleaned up
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [mode, setMode] = useState<DisplayMode>("both");
@@ -367,8 +369,7 @@ export default function SurahPage() {
       chapterAudioRef.current = null;
     }
     chapterAudioUrlRef.current = null;
-    audioDataRef.current = null;
-    setAudioData(null);
+    setRawAudioData(null);
     setPlayerOpen(false);
     setIsPlaying(false);
     setPlayingVerse(null);
@@ -390,13 +391,29 @@ export default function SurahPage() {
             segments: vt.segments ?? [],
           };
         }
-        setAudioData(amap);
-        audioDataRef.current = amap;
+        setRawAudioData(amap);
       })
       .catch(() => {});
 
     return () => { cancelled = true; };
   }, [id, reciterId]);
+
+  // Fix mislabeled or missing word timings so the highlight follows the recitation. Uses each verse's
+  // words (once loaded) for the word count and to share time between words in proportion to length.
+  useEffect(() => {
+    if (!rawAudioData) {
+      audioDataRef.current = null;
+      setAudioData(null);
+      return;
+    }
+    const cleaned: Record<string, VerseAudio> = {};
+    for (const [key, verse] of Object.entries(rawAudioData)) {
+      const words = wordData?.[Number(key.split(":")[1])];
+      cleaned[key] = { ...verse, segments: normalizeSegments(verse.segments, words?.map((w) => wordWeight(w.arabic))) };
+    }
+    audioDataRef.current = cleaned;
+    setAudioData(cleaned);
+  }, [rawAudioData, wordData]);
 
   // ── Audio playback ────────────────────────────────────────────────────────────
 

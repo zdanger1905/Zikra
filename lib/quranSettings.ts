@@ -15,9 +15,11 @@ export const QURAN_FONTS: { id: QuranFontId; label: string; description: string;
 
 export const DEFAULT_FONT: QuranFontId = "indopak";
 
-// `id` is the quran.com (QDC) reciter id used for chapter audio with word timings.
+// `id` is the quran.com (QDC) reciter id used for chapter audio with word timings
+// (list: https://api.qurancdn.com/api/qdc/audio/reciters). Timings are cleaned by lib/audioSegments.ts.
 export const RECITERS: { id: number; name: string }[] = [
-  { id: 7, name: "Mishary Rashid al-Afasy" },
+  { id: 7,   name: "Mishary Rashid al-Afasy" },
+  { id: 161, name: "Khalifa Al Tunaiji" },
 ];
 
 export const DEFAULT_RECITER = 7;
