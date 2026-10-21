@@ -15,6 +15,7 @@ import AskAIModal from "@/components/AskAIModal";
 import { auth } from "@/lib/firebase";
 import { saveVerse, unsaveVerse, getSavedVerseKeys, fuzzyMatch } from "@/lib/history";
 import AuthModal from "@/components/AuthModal";
+import { useKeepInViewport } from "@/lib/useKeepInViewport";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -953,6 +954,30 @@ export default function SurahPage() {
   );
 }
 
+// ─── WordTranslationBubble ────────────────────────────────────────────────────
+
+// Bubble above a tapped word. Slides back inside the screen near the edges (the arrow keeps pointing
+// at the word) and wraps long translations, so it never widens the page on phones.
+function WordTranslationBubble({ text }: { text: string }) {
+  const ref = useKeepInViewport<HTMLSpanElement>();
+  return (
+    <span
+      ref={ref}
+      className="absolute bottom-full left-1/2 mb-2 z-30 pointer-events-none"
+      style={{ direction: "ltr", transform: "translateX(calc(-50% + var(--edge-shift, 0px)))" }}
+    >
+      <span className="relative block w-max max-w-[calc(100vw-16px)] text-center bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-sans font-medium px-3 py-1.5 rounded-lg shadow-lg">
+        {text}
+        {/* Arrow */}
+        <span
+          className="absolute top-full left-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-900 dark:border-t-gray-100"
+          style={{ transform: "translateX(calc(-50% - var(--edge-shift, 0px)))" }}
+        />
+      </span>
+    </span>
+  );
+}
+
 // ─── FootnoteModal ────────────────────────────────────────────────────────────
 
 interface ActiveRef {
@@ -1219,18 +1244,7 @@ function ArabicWords({
             </button>
 
             {/* Tooltip bubble — only on click, not on audio highlight */}
-            {isClicked && word.translation && (
-              <span
-                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 pointer-events-none"
-                style={{ direction: "ltr" }}
-              >
-                <span className="relative block bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs font-sans font-medium px-3 py-1.5 rounded-lg shadow-lg whitespace-nowrap">
-                  {word.translation}
-                  {/* Arrow */}
-                  <span className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-900 dark:border-t-gray-100" />
-                </span>
-              </span>
-            )}
+            {isClicked && word.translation && <WordTranslationBubble text={word.translation} />}
           </span>
         );
       })}

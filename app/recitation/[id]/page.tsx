@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { fuzzyMatch } from "@/lib/history";
+import { useKeepInViewport } from "@/lib/useKeepInViewport";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -818,12 +819,7 @@ export default function RecitationPage() {
                           )}
                         >
                           {activeTooltip?.vn === vn && activeTooltip?.wi === wi && w.transliteration && (
-                            <span
-                              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-0.5 rounded-md bg-[#1a1a1a] border border-[#444] text-[#6b9fff] text-xs font-sans whitespace-nowrap pointer-events-none"
-                              style={{ fontSize: "0.35em", letterSpacing: "0.02em" }}
-                            >
-                              {w.transliteration}
-                            </span>
+                            <TransliterationBubble text={w.transliteration} />
                           )}
                           {w.arabic}{" "}
                         </span>
@@ -1187,6 +1183,28 @@ export default function RecitationPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// ─── TransliterationBubble ────────────────────────────────────────────────────
+
+// Bubble above a tapped word. Slides back inside the screen near the edges and wraps if very long,
+// so it never widens the page on phones.
+function TransliterationBubble({ text }: { text: string }) {
+  const ref = useKeepInViewport<HTMLSpanElement>();
+  return (
+    <span
+      ref={ref}
+      className="absolute bottom-full left-1/2 mb-1 px-2 py-0.5 rounded-md bg-[#1a1a1a] border border-[#444] text-[#6b9fff] text-xs font-sans w-max max-w-[calc(100vw-16px)] text-center pointer-events-none"
+      style={{
+        fontSize: "0.35em",
+        letterSpacing: "0.02em",
+        direction: "ltr",
+        transform: "translateX(calc(-50% + var(--edge-shift, 0px)))",
+      }}
+    >
+      {text}
+    </span>
   );
 }
 

@@ -27,6 +27,13 @@
   --font-sans: var(--font-geist-sans);
 }
 
+/* Anything poking past the right edge would otherwise widen the page and make phones zoom out.
+   `clip` (unlike `hidden`) doesn't break position: sticky. */
+html,
+body {
+  overflow-x: clip;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
