@@ -83,6 +83,7 @@ function AdhanPageInner() {
   const [testingPlay, setTestingPlay] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [connectingState, setConnectingState] = useState(false);
+  const [wrongAccount, setWrongAccount] = useState(false);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -112,6 +113,7 @@ function AdhanPageInner() {
   useEffect(() => {
     const err = searchParams.get("error");
     if (searchParams.get("connected")) showToast("Sonos connected! Now pick a speaker.");
+    else if (err === "no_household") setWrongAccount(true);
     else if (err) showToast(ERROR_MESSAGES[err] ?? "Could not connect to Sonos. Please try again.", false);
     if (err || searchParams.get("connected")) router.replace("/adhan");
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -246,15 +248,56 @@ function AdhanPageInner() {
                 <p className="text-gray-500 text-sm">Checking connection…</p>
               ) : !connected ? (
                 <div className="text-center py-4">
-                  <p className="text-gray-400 text-sm mb-5">Connect your Sonos account to enable automatic adhan playback.</p>
+                  {wrongAccount ? (
+                    <div className="text-left bg-[#3a2a2a] border border-[#6b3a3a] rounded-xl p-4 mb-5">
+                      <p className="text-white text-sm font-medium mb-2">That Sonos account has no speakers</p>
+                      <p className="text-gray-400 text-sm mb-3">
+                        Sonos signed you in with an account that has no speaker system. Sonos remembers
+                        that sign-in, so switch accounts like this:
+                      </p>
+                      <ol className="text-gray-300 text-sm list-decimal list-inside space-y-1.5">
+                        <li>
+                          <a
+                            href="https://www.sonos.com/logout"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline hover:text-white"
+                          >
+                            Sign out of Sonos
+                          </a>{" "}
+                          (opens in a new tab).
+                        </li>
+                        <li>
+                          Come back and click <span className="text-white">Try again</span>, then sign in with the
+                          email shown in your Sonos app under Settings → Account.
+                        </li>
+                      </ol>
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-sm mb-5">Connect your Sonos account to enable automatic adhan playback.</p>
+                  )}
                   <button
                     onClick={startSonosConnect}
                     disabled={connectingState}
                     className="inline-flex items-center gap-2.5 px-6 py-3 bg-[#000] text-white rounded-full text-sm font-semibold hover:bg-[#111] transition-colors disabled:opacity-50"
                   >
                     <SonosIcon />
-                    {connectingState ? "Connecting…" : "Connect Sonos"}
+                    {connectingState ? "Connecting…" : wrongAccount ? "Try again" : "Connect Sonos"}
                   </button>
+                  {!wrongAccount && (
+                    <p className="text-gray-600 text-xs mt-4">
+                      Need a different Sonos account?{" "}
+                      <a
+                        href="https://www.sonos.com/logout"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-gray-300"
+                      >
+                        Sign out of Sonos
+                      </a>{" "}
+                      first.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
