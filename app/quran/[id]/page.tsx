@@ -16,6 +16,7 @@ import { auth } from "@/lib/firebase";
 import { saveVerse, unsaveVerse, getSavedVerseKeys, fuzzyMatch } from "@/lib/history";
 import AuthModal from "@/components/AuthModal";
 import { useKeepInViewport } from "@/lib/useKeepInViewport";
+import { QURAN_FONTS, RECITERS, loadFont, loadReciter, quranFont, type QuranFontId } from "@/lib/quranSettings";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -95,6 +96,19 @@ export default function SurahPage() {
   useEffect(() => {
     localStorage.setItem("surah-theme", theme);
   }, [theme]);
+
+  // Reader font and reciter, chosen in the settings menu
+  const [font, setFont] = useState<QuranFontId>(loadFont);
+  const [reciterId, setReciterId] = useState<number>(loadReciter);
+  useEffect(() => {
+    localStorage.setItem("surah-font", font);
+    // Scoped to this page: other pages fall back to the default font once it unmounts
+    document.documentElement.style.setProperty("--quran-font", quranFont(font).family);
+    return () => { document.documentElement.style.removeProperty("--quran-font"); };
+  }, [font]);
+  useEffect(() => {
+    localStorage.setItem("surah-reciter", String(reciterId));
+  }, [reciterId]);
   // AI modal
   const [aiVerse, setAiVerse] = useState<{ verseNum: number; translation: string; arabic: string } | null>(null);
   // Saved verses
@@ -303,7 +317,7 @@ export default function SurahPage() {
     setAudioData(null);
     setActiveWord(null);
 
-    // Fetch Quran text, Asad translation, word-by-word data, and audio segments in parallel
+    // Fetch Quran text, Asad translation and word-by-word data in parallel (audio loads separately below)
     // asadDataCache ensures the 5 MB JSON is only downloaded once across surah navigations
     Promise.all([
       fetch(`https://api.alquran.cloud/v1/surah/${id}/editions/quran-uthmani`).then((r) =>
@@ -315,13 +329,8 @@ export default function SurahPage() {
       )
         .then((r) => r.json())
         .catch(() => null),
-      fetch(
-        `https://api.qurancdn.com/api/qdc/audio/reciters/7/audio_files?chapter_number=${id}&segments=true`
-      )
-        .then((r) => r.json())
-        .catch(() => null),
     ])
-      .then(([quranData, asad, wordApiData, recitationData]) => {
+      .then(([quranData, asad, wordApiData]) => {
         if (quranData.code !== 200 || !quranData.data?.[0])
           throw new Error();
         setArabic(quranData.data[0]);
@@ -342,27 +351,50 @@ export default function SurahPage() {
           }
           setWordData(map);
         }
-
-        // Parse QDC chapter audio: one file for the whole chapter, per-verse timings inside
-        if (recitationData?.audio_files?.[0]) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const file = recitationData.audio_files[0] as any;
-          chapterAudioUrlRef.current = file.audio_url ?? null;
-          const amap: Record<string, VerseAudio> = {};
-          for (const vt of file.verse_timings ?? []) {
-            amap[vt.verse_key] = {
-              timestampFrom: vt.timestamp_from,
-              timestampTo: vt.timestamp_to,
-              segments: vt.segments ?? [],
-            };
-          }
-          setAudioData(amap);
-          audioDataRef.current = amap;
-        }
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Chapter audio for the chosen reciter. Reloads on surah or reciter change without refetching the text.
+  useEffect(() => {
+    let cancelled = false;
+    if (chapterAudioRef.current) {
+      chapterAudioRef.current.pause();
+      chapterAudioRef.current.ontimeupdate = null;
+      chapterAudioRef.current = null;
+    }
+    chapterAudioUrlRef.current = null;
+    audioDataRef.current = null;
+    setAudioData(null);
+    setPlayerOpen(false);
+    setIsPlaying(false);
+    setPlayingVerse(null);
+    setPlayingWordIdx(null);
+
+    // QDC chapter audio: one file for the whole chapter, per-verse timings inside
+    fetch(`https://api.qurancdn.com/api/qdc/audio/reciters/${reciterId}/audio_files?chapter_number=${id}&segments=true`)
+      .then((r) => r.json())
+      .then((recitationData) => {
+        if (cancelled || !recitationData?.audio_files?.[0]) return;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const file = recitationData.audio_files[0] as any;
+        chapterAudioUrlRef.current = file.audio_url ?? null;
+        const amap: Record<string, VerseAudio> = {};
+        for (const vt of file.verse_timings ?? []) {
+          amap[vt.verse_key] = {
+            timestampFrom: vt.timestamp_from,
+            timestampTo: vt.timestamp_to,
+            segments: vt.segments ?? [],
+          };
+        }
+        setAudioData(amap);
+        audioDataRef.current = amap;
+      })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
+  }, [id, reciterId]);
 
   // ── Audio playback ────────────────────────────────────────────────────────────
 
@@ -603,6 +635,10 @@ export default function SurahPage() {
         onMenuToggle={() => setSidebarOpen((o) => !o)}
         theme={theme}
         onThemeChange={setTheme}
+        font={font}
+        onFontChange={setFont}
+        reciterId={reciterId}
+        onReciterChange={setReciterId}
       />
       <SurahMenu
         currentSurahNum={surahNum}
@@ -1489,6 +1525,14 @@ interface SurahListItem {
 
 // ─── SurahBanner ──────────────────────────────────────────────────────────────
 
+type SettingsSection = "theme" | "font" | "reciter";
+
+const SETTINGS_SECTIONS: { id: SettingsSection; label: string; Icon: (p: { className?: string }) => React.ReactElement }[] = [
+  { id: "theme",   label: "Theme",   Icon: PaletteIcon },
+  { id: "font",    label: "Font",    Icon: FontIcon },
+  { id: "reciter", label: "Reciter", Icon: MicIcon },
+];
+
 function SurahBanner({
   englishName,
   arabicName,
@@ -1496,6 +1540,10 @@ function SurahBanner({
   onMenuToggle,
   theme,
   onThemeChange,
+  font,
+  onFontChange,
+  reciterId,
+  onReciterChange,
 }: {
   englishName: string;
   arabicName: string;
@@ -1503,9 +1551,13 @@ function SurahBanner({
   onMenuToggle: () => void;
   theme: "light" | "dark";
   onThemeChange: (t: "light" | "dark") => void;
+  font: QuranFontId;
+  onFontChange: (f: QuranFontId) => void;
+  reciterId: number;
+  onReciterChange: (id: number) => void;
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<"theme">("theme");
+  const [activeSection, setActiveSection] = useState<SettingsSection>("theme");
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1557,7 +1609,7 @@ function SurahBanner({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div
             ref={modalRef}
-            className="relative flex w-[480px] max-w-[90vw] h-64 bg-[#2a2a2a] border border-[#444] rounded-2xl shadow-2xl overflow-hidden"
+            className="relative flex w-[480px] max-w-[90vw] h-80 max-h-[80vh] bg-[#2a2a2a] border border-[#444] rounded-2xl shadow-2xl overflow-hidden"
           >
             {/* X close button */}
             <button
@@ -1571,17 +1623,22 @@ function SurahBanner({
             {/* Left: settings nav */}
             <div className="w-36 shrink-0 bg-[#222] border-r border-[#3a3a3a] flex flex-col py-4 px-2">
               <p className="text-xs text-gray-500 uppercase tracking-widest mb-3 px-2">Settings</p>
-              <button
-                onClick={() => setActiveSection("theme")}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-left ${
-                  activeSection === "theme"
-                    ? "bg-[#3a3a3a] text-white"
-                    : "text-gray-400 hover:bg-[#333] hover:text-white"
-                }`}
-              >
-                <PaletteIcon className="w-4 h-4 shrink-0" />
-                Theme
-              </button>
+              <div className="flex flex-col gap-1">
+                {SETTINGS_SECTIONS.map(({ id, label, Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => setActiveSection(id)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-left ${
+                      activeSection === id
+                        ? "bg-[#3a3a3a] text-white"
+                        : "text-gray-400 hover:bg-[#333] hover:text-white"
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Right: setting options */}
@@ -1606,6 +1663,58 @@ function SurahBanner({
                       </button>
                     ))}
                   </div>
+                </>
+              )}
+
+              {activeSection === "font" && (
+                <>
+                  <p className="text-xs text-gray-500 uppercase tracking-widest mb-4">Arabic Font</p>
+                  <div className="flex flex-col gap-2">
+                    {QURAN_FONTS.map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => onFontChange(f.id)}
+                        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-colors text-left ${
+                          font === f.id
+                            ? "bg-[#4a4a4a] text-white"
+                            : "text-gray-400 hover:bg-[#383838] hover:text-white"
+                        }`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block">{f.label}</span>
+                          <span className="block text-xs text-gray-500">{f.description}</span>
+                        </span>
+                        {/* Preview in that font */}
+                        <span dir="rtl" className="ml-auto text-xl leading-loose shrink-0" style={{ fontFamily: f.family }}>
+                          بِسْمِ ٱللَّهِ
+                        </span>
+                        {font === f.id && <span className="text-[#6b9fff]">✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {activeSection === "reciter" && (
+                <>
+                  <p className="text-xs text-gray-500 uppercase tracking-widest mb-4">Reciter</p>
+                  <div className="flex flex-col gap-2">
+                    {RECITERS.map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => onReciterChange(r.id)}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-colors text-left ${
+                          reciterId === r.id
+                            ? "bg-[#4a4a4a] text-white"
+                            : "text-gray-400 hover:bg-[#383838] hover:text-white"
+                        }`}
+                      >
+                        <span>{r.name}</span>
+                        {reciterId === r.id && <span className="ml-auto text-[#6b9fff]">✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-3">Changing the reciter stops any audio that&apos;s playing.</p>
                 </>
               )}
             </div>
@@ -1832,6 +1941,22 @@ function PaletteIcon({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M4.098 19.902a3.75 3.75 0 0 0 5.304 0l6.401-6.402M6.75 21A3.75 3.75 0 0 1 3 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 0 0 3.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008Z" />
+    </svg>
+  );
+}
+
+function FontIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 19 9 5l5 14M5.8 14h6.4M15 19l3-8 3 8m-5.1-2.5h4.2" />
+    </svg>
+  );
+}
+
+function MicIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
     </svg>
   );
 }

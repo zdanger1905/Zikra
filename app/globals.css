@@ -65,7 +65,8 @@ body::-webkit-scrollbar {
 }
 
 .arabic {
-  font-family: 'ArabicFont', 'Hafs', 'Noto Nastaliq Urdu', 'Amiri', serif;
+  /* --quran-font is set by the surah page's font setting; everywhere else uses the IndoPak font */
+  font-family: var(--quran-font, 'ArabicFont'), 'ArabicFont', 'Hafs', 'Noto Nastaliq Urdu', 'Amiri', serif;
   direction: rtl;
   /* Extra room between Arabic words (added to the font's normal space) */
   word-spacing: 0.08em;
