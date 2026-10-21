@@ -134,6 +134,7 @@ export default function SurahPage() {
   const sliderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingSliderRef = useRef(false);
   const isHoveringSliderRef = useRef(false);
+  const lastUserScrollInputRef = useRef(-Infinity); // last wheel/touch/scroll-key input, vs. auto-scroll
   const trackRef = useRef<HTMLDivElement | null>(null);
   const thumbRef = useRef<HTMLDivElement | null>(null);
   const badgeRef = useRef<HTMLDivElement | null>(null);
@@ -197,13 +198,28 @@ export default function SurahPage() {
       }
       updateSliderDOM(progress, best);
 
+      // Only expand for manual scrolling, not the player's auto-follow. Once expanded, keep it
+      // alive through momentum scrolling after the finger lifts.
+      const manual = performance.now() - lastUserScrollInputRef.current < 800;
+      if (!manual && !sliderActiveRef.current) return;
       setSliderActive(true);
       if (sliderTimerRef.current) clearTimeout(sliderTimerRef.current);
       sliderTimerRef.current = setTimeout(() => { if (!isHoveringSliderRef.current) setSliderActive(false); }, 1200);
     }
+
+    const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
+    function markUserInput() { lastUserScrollInputRef.current = performance.now(); }
+    function onKeyDown(e: KeyboardEvent) { if (SCROLL_KEYS.has(e.key)) markUserInput(); }
+
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("wheel", markUserInput, { passive: true });
+    window.addEventListener("touchmove", markUserInput, { passive: true });
+    window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("wheel", markUserInput);
+      window.removeEventListener("touchmove", markUserInput);
+      window.removeEventListener("keydown", onKeyDown);
       if (sliderTimerRef.current) clearTimeout(sliderTimerRef.current);
     };
   }, []);
