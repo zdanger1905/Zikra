@@ -26,7 +26,13 @@ export async function GET(req: NextRequest) {
     const tokens = await exchangeCodeForTokens(code, sonosRedirectUri(req.nextUrl.origin));
     if (!tokens.access_token || !tokens.refresh_token) return back("error=token_failed");
 
-    const households = await getHouseholds(tokens.access_token);
+    let households: { id: string }[];
+    try {
+      households = await getHouseholds(tokens.access_token);
+    } catch (e) {
+      console.error("Sonos households request failed", e);
+      return back("error=households_failed");
+    }
     if (!households.length) return back("error=no_household");
 
     await db.collection(CONNECTIONS).doc(uid).set({
@@ -37,7 +43,8 @@ export async function GET(req: NextRequest) {
     });
 
     return back("connected=1");
-  } catch {
+  } catch (e) {
+    console.error("Sonos callback failed", e);
     return back("error=auth_failed");
   }
 }

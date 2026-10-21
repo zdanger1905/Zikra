@@ -43,7 +43,8 @@ const PRAYER_LABELS: { key: PrayerKey; label: string }[] = [
 const ERROR_MESSAGES: Record<string, string> = {
   denied: "Sonos access was not granted.",
   invalid_state: "That Sonos sign-in link expired. Please try again.",
-  no_household: "No Sonos system was found on that account.",
+  no_household: "No Sonos system was found on that account. Sign in with the account your speakers are set up on in the Sonos app.",
+  households_failed: "Sonos returned an error while looking up your system. Please try again.",
   not_connected: "Connect your Sonos first.",
   no_speaker: "Select a speaker first.",
   token_expired: "Your Sonos connection expired. Please reconnect.",

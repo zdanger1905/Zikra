@@ -72,6 +72,7 @@ export async function getHouseholds(accessToken: string): Promise<{ id: string }
   const res = await fetch(`${SONOS_API}/households`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+  if (!res.ok) throw new Error(`sonos_households_${res.status}: ${await res.text()}`);
   const data = await res.json();
   return data.households ?? [];
 }
