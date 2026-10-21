@@ -258,7 +258,7 @@ function AdhanPageInner() {
                       <ol className="text-gray-300 text-sm list-decimal list-inside space-y-1.5">
                         <li>
                           <a
-                            href="https://www.sonos.com/logout"
+                            href="https://api.sonos.com/login/v3/logout"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="underline hover:text-white"
@@ -288,7 +288,7 @@ function AdhanPageInner() {
                     <p className="text-gray-600 text-xs mt-4">
                       Need a different Sonos account?{" "}
                       <a
-                        href="https://www.sonos.com/logout"
+                        href="https://api.sonos.com/login/v3/logout"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline hover:text-gray-300"
